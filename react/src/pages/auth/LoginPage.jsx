@@ -40,9 +40,7 @@ export function LoginPage() {
   const insuranceDemoUsers = [
     { label: '🛡️ Carrier (Southlake)', email: 'carrier@gmail.com' },
     { label: '🧾 MGA (NTA Underwriters)', email: 'mga@gmail.com' },
-    { label: '💼 Broker (HIT Agency)', email: 'broker@gmail.com' },
-    { label: '🚛 Insured (Ayushi Fleet)', email: 'insured@gmail.com' },
-    { label: '👑 Owner / Admin', email: 'admin@veridex.com' }
+    { label: '💼 Broker (HIT Agency)', email: 'broker@gmail.com' }
   ];
 
   const pizzaDemoUsers = [
