@@ -148,10 +148,8 @@ export function FinanceProvider({ children }) {
         if (isDataReset() && Array.isArray(parsed)) {
           return parsed;
         }
-        if (Array.isArray(parsed) && parsed.length > 0 && !parsed.some(j => (j.lines || []).some(l => l.accountCode === '1002' || l.acct === '1002'))) {
-          // Condition-based correction for Franchise Remittance (JE 4 & JE 5):
-          // Scenario 1 (Franchise 70/30): Franchise retains $70 (70%) and pays Main Hub $30 (30% corporate royalty).
-          // Scenario 2 (Own Store 100%): Own Store is 100% owned by Main Hub, so it remits $100.
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let hasChanges = false;
           const corrected = parsed.map(j => {
             const desc = j.description || '';
             const isFranchiseRemit = desc.includes('JE 4') && desc.includes('Franchise pays Main Hub');
@@ -159,6 +157,7 @@ export function FinanceProvider({ children }) {
             if (isFranchiseRemit || isFranchiseHubReceipt) {
               const hasHundred = (j.lines || []).some(l => Number(l.debit) === 100 || Number(l.credit) === 100);
               if (hasHundred) {
+                hasChanges = true;
                 return {
                   ...j,
                   lines: (j.lines || []).map(l => ({
@@ -169,11 +168,46 @@ export function FinanceProvider({ children }) {
                 };
               }
             }
+
+            // Correction for Own Store JE 1:
+            // Own Store invoices customer -> Cr 2050 (Due to Main Hub), not 4600 (Franchise Revenue Share)
+            const isOwnStoreJe1 = desc.includes('JE 1') && (desc.includes('Own Store invoices') || desc.includes('Own Store'));
+            if (isOwnStoreJe1) {
+              const has4600 = (j.lines || []).some(l => (l.accountCode || l.acct) === '4600');
+              const hasPremiumName = (j.lines || []).some(l => (l.accountName || '').toLowerCase().includes('premium'));
+              if (has4600 || hasPremiumName) {
+                hasChanges = true;
+                return {
+                  ...j,
+                  lines: (j.lines || []).map(l => {
+                    const code = l.accountCode || l.acct;
+                    if (code === '4600') {
+                      return {
+                        ...l,
+                        accountCode: '2050',
+                        acct: '2050',
+                        accountName: 'Due to Main Hub (Intercompany Payable)',
+                        description: 'Due to Main Hub (Intercompany Payable)'
+                      };
+                    }
+                    if (code === '1100') {
+                      return {
+                        ...l,
+                        accountName: l.accountName && !l.accountName.toLowerCase().includes('premium') ? l.accountName : 'A/R – Ayushi'
+                      };
+                    }
+                    return l;
+                  })
+                };
+              }
+            }
             return j;
           });
-          try {
-            localStorage.setItem('v_gl_journal_entries', JSON.stringify(corrected));
-          } catch (e) {}
+          if (hasChanges) {
+            try {
+              localStorage.setItem('v_gl_journal_entries', JSON.stringify(corrected));
+            } catch (e) {}
+          }
           return corrected;
         }
       }

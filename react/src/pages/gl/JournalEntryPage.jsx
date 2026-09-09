@@ -2,8 +2,25 @@ import React, { useState, useMemo } from 'react';
 import { useFinance } from '../../context/FinanceContext';
 import { DIMENSION_MAP } from '../../data/mockAccounts';
 
+const PIZZA_ACCOUNT_NAMES = {
+  '1001': 'Cash / Bank',
+  '1002': 'Franchise Operating Bank Account',
+  '1100': 'Accounts Receivable (A/R)',
+  '1180': 'Due from Stores (Intercompany Receivable)',
+  '1500': 'Raw Material Inventory',
+  '2001': 'Accounts Payable (A/P)',
+  '2050': 'Due to Main Hub (Intercompany Payable)',
+  '3100': 'Common Stock / Capital',
+  '3200': 'Retained Earnings',
+  '4500': 'Franchise Pizza Revenue',
+  '4600': 'Main Hub Pizza Revenue',
+  '5300': 'Revenue Share Expense',
+  '5400': 'Store Operating Expenses',
+  '5500': 'General & Administrative Expenses'
+};
+
 export function JournalEntryPage() {
-  const { journalEntries, entityJournalEntries, postJournalEntry, addJournalEntry, accounts } = useFinance();
+  const { journalEntries, entityJournalEntries, postJournalEntry, addJournalEntry, accounts, currentAccountingLevel } = useFinance();
 
   const [activeTab, setActiveTab] = useState('recent'); // 'recent' or 'history'
   const [searchTerm, setSearchTerm] = useState('');
@@ -733,11 +750,23 @@ export function JournalEntryPage() {
                 </thead>
                 <tbody>
                   {(selectedEntry.lines || []).map((l, i) => {
-                    const matchedAcct = accounts.find(a => a.code === (l.accountCode || l.acct));
+                    const code = l.accountCode || l.acct;
+                    const matchedAcct = accounts.find(a => a.code === code);
+                    const isPizzaMode = selectedEntry.accountingLevel === 'pizza' || currentAccountingLevel === 'pizza';
+
+                    let lineName = l.accountName;
+                    if (isPizzaMode) {
+                      if (!lineName || lineName === '—' || lineName.toLowerCase().includes('premium')) {
+                        lineName = PIZZA_ACCOUNT_NAMES[code] || matchedAcct?.name || '—';
+                      }
+                    } else {
+                      lineName = matchedAcct ? matchedAcct.name : (lineName || '—');
+                    }
+
                     return (
                       <tr key={i}>
-                        <td className="cell-link">{l.accountCode || l.acct}</td>
-                        <td>{matchedAcct ? matchedAcct.name : (l.accountName || '—')}</td>
+                        <td className="cell-link">{code}</td>
+                        <td>{lineName}</td>
                         <td>{l.desc || l.description || selectedEntry.description}</td>
                         <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                           {l.debit > 0 ? parseFloat(l.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}

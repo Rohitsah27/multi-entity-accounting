@@ -336,7 +336,7 @@ export function PosOperationsPage() {
             status: 'Posted',
             lines: [
               { accountCode: '1100', accountName: `A/R – ${customerName}`, debit: numericAmount, credit: 0, description: `A/R – ${customerName}` },
-              { accountCode: '4600', accountName: 'Pizza Sales Revenue – Main Hub', debit: 0, credit: numericAmount, description: 'Pizza Sales Revenue – Main Hub' }
+              { accountCode: '2050', accountName: 'Due to Main Hub (Intercompany Payable)', debit: 0, credit: numericAmount, description: 'Due to Main Hub (Intercompany Payable)' }
             ]
           });
 
@@ -625,7 +625,7 @@ export function PosOperationsPage() {
         hubJeNumber: hubJe ? (hubJe.id || `JE-HUB-${Date.now().toString().slice(-4)}`) : null,
         jeLines: postedJe?.lines || (isOwn ? [
           { code: '1100', name: `A/R – ${customerName}`, debit: numericAmount, credit: 0 },
-          { code: '4600', name: 'Pizza Sales Revenue – Main Hub', debit: 0, credit: numericAmount }
+          { code: '2050', name: 'Due to Main Hub (Intercompany Payable)', debit: 0, credit: numericAmount }
         ] : [
           { code: '1100', name: `A/R – ${customerName}`, debit: numericAmount, credit: 0 },
           { code: '4500', name: 'Franchise Pizza Revenue', debit: 0, credit: franchiseShare },
@@ -644,7 +644,7 @@ export function PosOperationsPage() {
 
       if (eventType === 'CUSTOMER_INVOICE') {
         if (isOwn) {
-          showToast(`JE 1 & JE 2 posted: Own Store invoices ${customerName} $${numericAmount.toFixed(0)} (A/R Dr $${numericAmount.toFixed(0)}, Pizza Sales Revenue – Main Hub Cr $${numericAmount.toFixed(0)}). Main Hub records A/R – Own Store Dr $${numericAmount.toFixed(0)}, Pizza Sales Revenue Cr $${numericAmount.toFixed(0)}.`);
+          showToast(`JE 1 & JE 2 posted: Own Store invoices ${customerName} $${numericAmount.toFixed(0)} (A/R Dr $${numericAmount.toFixed(0)}, Due to Main Hub Cr $${numericAmount.toFixed(0)}). Main Hub records A/R – Own Store Dr $${numericAmount.toFixed(0)}, Pizza Sales Revenue Cr $${numericAmount.toFixed(0)}.`);
         } else {
           showToast(`JE 1 & JE 2 posted: Invoiced ${customerName} $${numericAmount.toFixed(0)} (Store Revenue $${franchiseShare.toFixed(0)}, Payable to Hub $${corporateShare.toFixed(0)}). Main Hub recorded $${corporateShare.toFixed(0)} A/R.`);
         }
@@ -1147,9 +1147,9 @@ export function PosOperationsPage() {
                             {/* Store Entry (JE 1, JE 3, or JE 4) */}
                             <div style={{ marginBottom: evt.hubJeLines ? '12px' : '0' }}>
                               <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#f8fafc', marginBottom: '6px' }}>
-                                {evt.eventType === 'CUSTOMER_INVOICE' && `JE 1 — Franchise invoices ${evt.customer} for $${evt.totalAmount} (${evt.jeNumber}):`}
-                                {evt.eventType === 'CUSTOMER_PAYMENT_RECEIVED' && `JE 3 — ${evt.customer} pays Franchise ($${evt.totalAmount}) (${evt.jeNumber}):`}
-                                {evt.eventType === 'FRANCHISE_ROYALTY_REMITTANCE' && `JE 4 — Franchise pays Main Hub ($${evt.totalAmount}) (${evt.jeNumber}):`}
+                                {evt.eventType === 'CUSTOMER_INVOICE' && (evt.entity === 'ENT-OWN-01' ? `JE 1 — Own Store invoices ${evt.customer} for $${evt.totalAmount} (${evt.jeNumber}):` : `JE 1 — Franchise invoices ${evt.customer} for $${evt.totalAmount} (${evt.jeNumber}):`)}
+                                {evt.eventType === 'CUSTOMER_PAYMENT_RECEIVED' && (evt.entity === 'ENT-OWN-01' ? `JE 3 — ${evt.customer} pays Own Store ($${evt.totalAmount}) (${evt.jeNumber}):` : `JE 3 — ${evt.customer} pays Franchise ($${evt.totalAmount}) (${evt.jeNumber}):`)}
+                                {evt.eventType === 'FRANCHISE_ROYALTY_REMITTANCE' && (evt.entity === 'ENT-OWN-01' ? `JE 4 — Own Store pays Main Hub ($${evt.totalAmount}) (${evt.jeNumber}):` : `JE 4 — Franchise pays Main Hub ($${evt.totalAmount}) (${evt.jeNumber}):`)}
                               </div>
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
                                 {evt.jeLines.map((line, idx) => (
@@ -1179,8 +1179,8 @@ export function PosOperationsPage() {
                             {evt.hubJeLines && (
                               <div style={{ marginTop: '10px' }}>
                                 <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#38bdf8', marginBottom: '6px' }}>
-                                  {evt.eventType === 'CUSTOMER_INVOICE' && `JE 2 — Main Hub records receivable from Franchise ($${evt.corporateShare}) (${evt.hubJeNumber || 'JE-HUB'}):`}
-                                  {evt.eventType === 'FRANCHISE_ROYALTY_REMITTANCE' && `JE 5 — Main Hub receives payment ($${evt.totalAmount}) (${evt.hubJeNumber || 'JE-HUB'}):`}
+                                  {evt.eventType === 'CUSTOMER_INVOICE' && (evt.entity === 'ENT-OWN-01' ? `JE 2 — Main Hub records receivable from Own Store ($${evt.totalAmount}) (${evt.hubJeNumber || 'JE-HUB'}):` : `JE 2 — Main Hub records receivable from Franchise ($${evt.corporateShare}) (${evt.hubJeNumber || 'JE-HUB'}):`)}
+                                  {evt.eventType === 'FRANCHISE_ROYALTY_REMITTANCE' && (evt.entity === 'ENT-OWN-01' ? `JE 5 — Main Hub receives payment from Own Store ($${evt.totalAmount}) (${evt.hubJeNumber || 'JE-HUB'}):` : `JE 5 — Main Hub receives payment ($${evt.totalAmount}) (${evt.hubJeNumber || 'JE-HUB'}):`)}
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
                                   {evt.hubJeLines.map((line, idx) => (

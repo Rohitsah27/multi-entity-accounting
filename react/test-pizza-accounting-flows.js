@@ -270,7 +270,7 @@ function runScenario2OwnStoreTest() {
     description: `JE 1 — Own Store invoices ${customer} for $${price}`,
     lines: [
       { code: '1100', name: `A/R – ${customer}`, debit: price, credit: 0 },
-      { code: '4600', name: 'Pizza Sales Revenue – Main Hub', debit: 0, credit: price }
+      { code: '2050', name: 'Due to Main Hub (Intercompany Payable)', debit: 0, credit: price }
     ]
   };
 
