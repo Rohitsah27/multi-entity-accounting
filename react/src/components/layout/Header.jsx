@@ -12,10 +12,23 @@ import {
   ChevronIcon
 } from '../common/Icons';
 
+function entityAvatarEmoji(businessType) {
+  switch (businessType) {
+    case 'hub': return '🏢';
+    case 'franchise': return '🍕';
+    case 'ownstore': return '🏪';
+    case 'customer': return '👤';
+    case 'carrier': return '🛡️';
+    case 'agency':
+    case 'broker': return '🏢';
+    default: return '📙';
+  }
+}
+
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, activeEntity, switchRole, allUsers, logout } = useAuth();
+  const { currentUser, activeEntity, switchRole, allUsers, logout, accountingLevel, setAccountingLevel } = useAuth();
   const bType = currentUser?.businessType || activeEntity?.businessType || 'mga';
   const {
     currentTheme,
@@ -144,6 +157,8 @@ export function Header() {
       clearAllData();
       await syncWithBackend();
       window.dispatchEvent(new Event('veridex:pas-events-reset'));
+      window.dispatchEvent(new Event('veridex:pos-events-reset'));
+      window.dispatchEvent(new Event('veridex:data-reset'));
       setToastMessage('Transactions cleared. Chart of Accounts and login credentials kept.');
       setTimeout(() => setToastMessage(null), 3500);
     } catch (e) {
@@ -188,6 +203,41 @@ export function Header() {
 
       {/* Right zone: Actions */}
       <div className="header-actions">
+        {/* Accounting Level Switcher Badge (Insurance vs Domino's Pizza) */}
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            id="header-accounting-level-btn"
+            onClick={() => {
+              const next = (accountingLevel === 'pizza' ? 'insurance' : 'pizza');
+              if (setAccountingLevel) setAccountingLevel(next);
+              showToast(`Switched accounting context to: ${next === 'pizza' ? "Domino's Pizza Level" : "Insurance Level"}`);
+            }}
+            title={`Active Accounting Level: ${accountingLevel === 'pizza' ? "Domino's Pizza" : "Insurance"}. Click to switch context.`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '20px',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              border: accountingLevel === 'pizza' ? '1px solid rgba(249, 115, 22, 0.4)' : '1px solid rgba(37, 99, 235, 0.4)',
+              background: accountingLevel === 'pizza' ? 'rgba(249, 115, 22, 0.12)' : 'rgba(37, 99, 235, 0.12)',
+              color: accountingLevel === 'pizza' ? '#ea580c' : '#2563eb',
+              cursor: 'pointer',
+              height: '32px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>{accountingLevel === 'pizza' ? '🍕' : '🛡️'}</span>
+            <span>{accountingLevel === 'pizza' ? "Domino's Pizza" : 'Insurance'}</span>
+            <span style={{ fontSize: '10px', opacity: 0.7, padding: '1px 5px', borderRadius: '8px', background: 'rgba(0,0,0,0.06)' }}>
+              ⇄ Switch
+            </span>
+          </button>
+        </div>
+
         {/* MongoDB Atlas Live Database Badge */}
         <div className="v-db-status-wrap" ref={dbMenuRef} style={{ position: 'relative' }}>
           <button
@@ -539,7 +589,7 @@ export function Header() {
             title="Switch entity workspace"
           >
             <div className="v-entity-avatar">
-              {currentUser?.businessType === 'carrier' ? '🛡️' : currentUser?.businessType === 'agency' ? '🏢' : '📙'}
+              {entityAvatarEmoji(currentUser?.businessType)}
             </div>
             <div>
               <div className="v-entity-label">{currentUser?.entityName || 'My Business'}</div>
@@ -549,28 +599,98 @@ export function Header() {
           </div>
 
           <div className={`v-entity-menu ${isEntityOpen ? 'open' : ''}`}>
-            <div className="v-entity-menu-group-label">Insurance Operations</div>
-            {allUsers
-              .filter(u => ['carrier', 'mga', 'agency', 'broker'].includes(u.businessType) && u.entityId && u.entityId !== 'ENT-MINE')
-              .map(u => (
-                <div
-                  key={u.email}
-                  className={`v-entity-menu-item ${currentUser?.email === u.email ? 'active' : ''}`}
-                  onClick={() => handleEntitySelect(u)}
-                >
-                  <div className="v-entity-avatar">
-                    {u.businessType === 'carrier' ? '🛡️' : u.businessType === 'agency' || u.businessType === 'broker' ? '🏢' : '📙'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)' }}>
-                      {u.entityName}
+            {accountingLevel === 'pizza' ? (
+              <>
+                {[
+                  { entityId: 'ENT-HUB-01', email: 'hub@pizza.demo', entityName: 'Main Hub', businessType: 'hub', businessLabel: 'Franchise Main Hub' },
+                  { entityId: 'ENT-FRN-01', email: 'franchise@pizza.demo', entityName: 'Franchise Store #12', businessType: 'franchise', businessLabel: 'Franchise-Owned Store' },
+                  { entityId: 'ENT-OWN-01', email: 'ownstore@pizza.demo', entityName: 'Own Store #1', businessType: 'ownstore', businessLabel: 'Company-Owned Store' }
+                ].map(preset => {
+                  const u = (allUsers || []).find(user =>
+                    user.entityId === preset.entityId ||
+                    user.email?.toLowerCase() === preset.email.toLowerCase()
+                  ) || preset;
+
+                  const isCurrentActive =
+                    currentUser?.entityId === u.entityId ||
+                    currentUser?.email?.toLowerCase() === u.email?.toLowerCase() ||
+                    activeEntity?.id === u.entityId;
+
+                  return (
+                    <div
+                      key={u.email || u.entityId}
+                      className={`v-entity-menu-item ${isCurrentActive ? 'active' : ''}`}
+                      onClick={() => handleEntitySelect(u)}
+                    >
+                      <div className="v-entity-avatar">{entityAvatarEmoji(u.businessType)}</div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)' }}>
+                          {u.entityName}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
+                          {u.businessLabel}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
-                      {u.businessLabel}
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                {[
+                  {
+                    entityId: 'ENT-AGY-01',
+                    email: 'broker@gmail.com',
+                    entityName: 'HIT Retail Producers Inc.',
+                    businessType: 'agency',
+                    businessLabel: 'Retail Insurance Agency'
+                  },
+                  {
+                    entityId: 'ENT-MGA-01',
+                    email: 'mga@gmail.com',
+                    entityName: 'NTA Delegated Underwriters',
+                    businessType: 'mga',
+                    businessLabel: 'MGA / Program Manager'
+                  },
+                  {
+                    entityId: 'ENT-CAR-01',
+                    email: 'carrier@gmail.com',
+                    entityName: 'Southlake Risk Carriers Ltd',
+                    businessType: 'carrier',
+                    businessLabel: 'Risk Underwriting Carrier'
+                  }
+                ].map(preset => {
+                  const u = (allUsers || []).find(user =>
+                    user.entityId === preset.entityId ||
+                    user.email?.toLowerCase() === preset.email.toLowerCase() ||
+                    user.entityName?.toLowerCase() === preset.entityName.toLowerCase()
+                  ) || preset;
+
+                  const isCurrentActive =
+                    currentUser?.entityId === u.entityId ||
+                    currentUser?.email?.toLowerCase() === u.email?.toLowerCase() ||
+                    activeEntity?.id === u.entityId;
+
+                  return (
+                    <div
+                      key={u.email || u.entityId}
+                      className={`v-entity-menu-item ${isCurrentActive ? 'active' : ''}`}
+                      onClick={() => handleEntitySelect(u)}
+                    >
+                      <div className="v-entity-avatar">{entityAvatarEmoji(u.businessType)}</div>
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-ink)' }}>
+                          {u.entityName}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-muted)' }}>
+                          {u.businessLabel}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </>
+            )}
           </div>
         </div>
 

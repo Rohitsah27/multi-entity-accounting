@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFinance } from '../../context/FinanceContext';
 import './accounts-payable.css';
@@ -33,11 +33,21 @@ export function AccountsPayablePage() {
   // Core AP Invoices State
   const [payables, setPayables] = useState(() => {
     try {
+      if (localStorage.getItem('v_data_reset') === '1') return [];
       const saved = localStorage.getItem('v_ap_invoices_data');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return [];
   });
+
+  useEffect(() => {
+    const handleReset = () => {
+      setPayables([]);
+      try { localStorage.removeItem('v_ap_invoices_data'); } catch {}
+    };
+    window.addEventListener('veridex:data-reset', handleReset);
+    return () => window.removeEventListener('veridex:data-reset', handleReset);
+  }, []);
 
   // Merge in inter-entity settlement bills raised dynamically elsewhere (e.g.
   // the PAS Event Injector's Stage 2 PAYMENT_RECEIVED, which raises a real

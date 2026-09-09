@@ -33,6 +33,23 @@ const DEMO_CREDENTIALS = {
     password: 'admin@123', role: 'owner', name: 'Jordan Blake',
     roleLabel: 'Business Owner / Principal', entityId: 'ENT-MINE', entityName: 'My Business',
     businessType: 'mga', businessLabel: 'MGA / Program Manager', avatarColor: '#0369A1', initials: 'JB'
+  },
+  // Generic multi-entity demo (Pizza franchise scenario) — added alongside
+  // the insurance demo profiles above, not replacing them.
+  'hub@pizza.demo': {
+    password: 'admin@123', role: 'hub-admin', name: 'Jordan Blake',
+    roleLabel: 'Main Hub Administrator', entityId: 'ENT-HUB-01', entityName: 'Main Hub',
+    businessType: 'hub', businessLabel: 'Franchise Main Hub', avatarColor: '#0369A1', initials: 'MH'
+  },
+  'franchise@pizza.demo': {
+    password: 'admin@123', role: 'franchise-owner', name: 'Marco Rossi',
+    roleLabel: 'Franchise Store Owner', entityId: 'ENT-FRN-01', entityName: 'Franchise Store #12',
+    businessType: 'franchise', businessLabel: 'Franchise-Owned Store', avatarColor: '#F97316', initials: 'FS'
+  },
+  'ownstore@pizza.demo': {
+    password: 'admin@123', role: 'ownstore-manager', name: 'Priya Nair',
+    roleLabel: 'Own Store Manager', entityId: 'ENT-OWN-01', entityName: 'Own Store #1',
+    businessType: 'ownstore', businessLabel: 'Company-Owned Store', avatarColor: '#10B981', initials: 'OS'
   }
 };
 

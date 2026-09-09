@@ -63,6 +63,8 @@ export default function ClearAllPage() {
       addLog('Re-syncing local state from MongoDB Atlas...');
       await syncWithBackend();
       window.dispatchEvent(new Event('veridex:pas-events-reset'));
+      window.dispatchEvent(new Event('veridex:pos-events-reset'));
+      window.dispatchEvent(new Event('veridex:data-reset'));
       addLog('SUCCESS: All subledger transactions purged cleanly.');
       showToast('Transactions purged cleanly!');
     } catch (err) {

@@ -2,9 +2,15 @@ export const SEED_ACCOUNTS = [
   { code: '1001', name: 'Cash / Bank (Operating Account)', group: 'asset', type: 'Asset', dimensions: ['cost-center', 'location'], status: 'active', normalBalance: 'Debit', balance: 1790600 },
   { code: '1100', name: 'Premium Receivable', group: 'asset', type: 'Asset', dimensions: ['mga', 'state', 'lob', 'cost-center'], status: 'active', normalBalance: 'Debit', balance: 1241800 },
   { code: '1150', name: 'Reinsurance Recoverables', group: 'asset', type: 'Asset', dimensions: ['reinsurer', 'treaty'], status: 'active', normalBalance: 'Debit', balance: 342000 },
+  // Generic multi-entity accounts (Pizza/franchise demo and beyond) — new
+  // codes, deliberately not reusing 1100/2200/4100/5100 etc. so the existing
+  // insurance PAS flow (still functional, just unlinked from nav) keeps
+  // showing its own correct account names.
+  { code: '1180', name: 'Due from Stores (Intercompany Receivable)', group: 'asset', type: 'Asset', dimensions: ['cost-center'], status: 'active', normalBalance: 'Debit', balance: 0 },
   { code: '1200', name: 'Accounts Receivable (Trade / General)', group: 'asset', type: 'Asset', dimensions: ['cost-center'], status: 'active', normalBalance: 'Debit', balance: 154000 },
   { code: '1400', name: 'Prepaid Expenses & Other Current Assets', group: 'asset', type: 'Asset', dimensions: ['cost-center'], status: 'active', normalBalance: 'Debit', balance: 48000 },
   { code: '2001', name: 'Accounts Payable (Trade)', group: 'liability', type: 'Liability', dimensions: ['cost-center'], status: 'active', normalBalance: 'Credit', balance: 842100 },
+  { code: '2050', name: 'Due to Main Hub (Intercompany Payable)', group: 'liability', type: 'Liability', dimensions: ['cost-center'], status: 'active', normalBalance: 'Credit', balance: 0 },
   { code: '2100', name: 'Ceded Reinsurance Premium Payable', group: 'liability', type: 'Liability', dimensions: ['reinsurer', 'treaty'], status: 'active', normalBalance: 'Credit', balance: 295000 },
   { code: '2200', name: 'Net Premium Payable to Carrier', group: 'liability', type: 'Liability', dimensions: ['carrier-dim', 'lob'], status: 'active', normalBalance: 'Credit', balance: 485000 },
   { code: '2300', name: 'Surplus Lines Taxes & Regulatory Fees Payable', group: 'liability', type: 'Liability', dimensions: ['state'], status: 'active', normalBalance: 'Credit', balance: 67200 },
@@ -14,9 +20,12 @@ export const SEED_ACCOUNTS = [
   { code: '4001', name: 'Gross Written Premium (GWP)', group: 'revenue', type: 'Revenue', dimensions: ['lob', 'mga', 'state'], status: 'active', normalBalance: 'Credit', balance: 2450000 },
   { code: '4100', name: 'MGA Program Override & Policy Fee Revenue', group: 'revenue', type: 'Revenue', dimensions: ['mga', 'lob'], status: 'active', normalBalance: 'Credit', balance: 245000 },
   { code: '4200', name: 'Producer / Broker Commission Revenue', group: 'revenue', type: 'Revenue', dimensions: ['broker', 'lob'], status: 'active', normalBalance: 'Credit', balance: 68000 },
+  { code: '4500', name: 'Sales Revenue', group: 'revenue', type: 'Revenue', dimensions: ['class', 'location', 'customer-job', 'product-line'], status: 'active', normalBalance: 'Credit', balance: 0 },
+  { code: '4600', name: 'Franchise Revenue Share Income', group: 'revenue', type: 'Revenue', dimensions: ['cost-center'], status: 'active', normalBalance: 'Credit', balance: 0 },
   { code: '5001', name: 'Incurred Losses & LAE', group: 'expense', type: 'Expense', dimensions: ['lob', 'treaty'], status: 'active', normalBalance: 'Debit', balance: 680000 },
   { code: '5100', name: 'Acquisition Costs & Broker Commissions', group: 'expense', type: 'Expense', dimensions: ['broker', 'lob'], status: 'active', normalBalance: 'Debit', balance: 210000 },
-  { code: '5200', name: 'General & Administrative Expenses', group: 'expense', type: 'Expense', dimensions: ['cost-center', 'location'], status: 'active', normalBalance: 'Debit', balance: 185000 }
+  { code: '5200', name: 'General & Administrative Expenses', group: 'expense', type: 'Expense', dimensions: ['cost-center', 'location'], status: 'active', normalBalance: 'Debit', balance: 185000 },
+  { code: '5300', name: 'Revenue Share Expense', group: 'expense', type: 'Expense', dimensions: ['cost-center'], status: 'active', normalBalance: 'Debit', balance: 0 }
 ];
 
 export const SEED_PERIODS = [
@@ -150,6 +159,53 @@ export const SEED_USERS = [
     role: 'Super Admin',
     roleLabel: 'Platform Administrator',
     department: 'Information Technology',
+    status: 'Active',
+    twoFactorEnabled: true
+  },
+  // Generic multi-entity demo (Pizza franchise scenario) — added alongside
+  // the insurance demo users above, not replacing them.
+  {
+    email: 'hub@pizza.demo',
+    name: 'Jordan Blake',
+    password: 'admin@123',
+    role: 'hub-admin',
+    roleLabel: 'Main Hub Administrator',
+    entityId: 'ENT-HUB-01',
+    entityName: 'Main Hub',
+    businessType: 'hub',
+    businessLabel: 'Franchise Main Hub',
+    avatarColor: '#0369A1',
+    initials: 'MH',
+    status: 'Active',
+    twoFactorEnabled: true
+  },
+  {
+    email: 'franchise@pizza.demo',
+    name: 'Marco Rossi',
+    password: 'admin@123',
+    role: 'franchise-owner',
+    roleLabel: 'Franchise Store Owner',
+    entityId: 'ENT-FRN-01',
+    entityName: 'Franchise Store #12',
+    businessType: 'franchise',
+    businessLabel: 'Franchise-Owned Store',
+    avatarColor: '#F97316',
+    initials: 'FS',
+    status: 'Active',
+    twoFactorEnabled: true
+  },
+  {
+    email: 'ownstore@pizza.demo',
+    name: 'Priya Nair',
+    password: 'admin@123',
+    role: 'ownstore-manager',
+    roleLabel: 'Own Store Manager',
+    entityId: 'ENT-OWN-01',
+    entityName: 'Own Store #1',
+    businessType: 'ownstore',
+    businessLabel: 'Company-Owned Store',
+    avatarColor: '#10B981',
+    initials: 'OS',
     status: 'Active',
     twoFactorEnabled: true
   }

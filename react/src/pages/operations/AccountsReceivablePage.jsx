@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useFinance } from '../../context/FinanceContext';
 import './accounts-receivable.css';
@@ -28,11 +28,21 @@ export function AccountsReceivablePage() {
   // Invoices Data State
   const [invoices, setInvoices] = useState(() => {
     try {
+      if (localStorage.getItem('v_data_reset') === '1') return [];
       const saved = localStorage.getItem('v_ar_invoices_data');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return [];
   });
+
+  useEffect(() => {
+    const handleReset = () => {
+      setInvoices([]);
+      try { localStorage.removeItem('v_ar_invoices_data'); } catch {}
+    };
+    window.addEventListener('veridex:data-reset', handleReset);
+    return () => window.removeEventListener('veridex:data-reset', handleReset);
+  }, []);
 
   // Merge in receivables raised dynamically elsewhere (e.g. the PAS Event
   // Injector's Stage 1 POLICY_BINDING_INVOICED, which raises a real

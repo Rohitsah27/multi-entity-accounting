@@ -29,6 +29,8 @@ import { JournalEntryPage } from '../pages/gl/JournalEntryPage';
 import { ManualEntryPage } from '../pages/gl/ManualEntryPage';
 import { FinancialStatementsPage } from '../pages/gl/FinancialStatementsPage';
 import { PeriodClosePage } from '../pages/gl/PeriodClosePage';
+import { SalesTransactionsPage } from '../pages/business/SalesTransactionsPage';
+import { PosOperationsPage } from '../pages/business/PosOperationsPage';
 
 // Operations & Treasury
 import { AccountsReceivablePage } from '../pages/operations/AccountsReceivablePage';
@@ -124,6 +126,11 @@ export function AppRoutes() {
         <Route path="/financial-statements" element={<FinancialStatementsPage />} />
         <Route path="/period-close" element={<PeriodClosePage />} />
         <Route path="/period-locking" element={<PeriodClosePage />} />
+        <Route path="/sales-transactions" element={<SalesTransactionsPage />} />
+        <Route path="/pizza-sales" element={<SalesTransactionsPage />} />
+        <Route path="/pos-operations" element={<PosOperationsPage />} />
+        <Route path="/pos-injector" element={<PosOperationsPage />} />
+        <Route path="/pizza-pos" element={<PosOperationsPage />} />
 
         {/* Operations & Treasury */}
         <Route path="/accounts-receivable" element={<AccountsReceivablePage />} />

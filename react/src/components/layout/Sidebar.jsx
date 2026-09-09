@@ -12,7 +12,7 @@ import {
 
 export function Sidebar({ isCollapsed, onToggleCollapse }) {
   const location = useLocation();
-  const { activeEntity, currentUser } = useAuth();
+  const { activeEntity, currentUser, accountingLevel } = useAuth();
   const { showGlSimulation } = useTheme();
   const bType = currentUser?.businessType || activeEntity?.businessType || 'mga';
 
@@ -22,8 +22,8 @@ export function Sidebar({ isCollapsed, onToggleCollapse }) {
   // null, and wins regardless of role).
   const glSimVisible = showGlSimulation === null ? bType !== 'carrier' : showGlSimulation;
 
-  // Visible groups based on business type
-  const visibleGroups = NAV_CONFIG.filter(group => isGroupVisibleForType(group.id, bType));
+  // Visible groups based on business type and accounting level
+  const visibleGroups = NAV_CONFIG.filter(group => isGroupVisibleForType(group.id, bType, accountingLevel));
 
   // Keep track of which nav groups are expanded. Only the group that
   // actually contains the page you're on starts open — groups used to be
@@ -75,7 +75,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }) {
       <nav className="sidebar-nav">
         {visibleGroups.map((group) => {
           const visibleChildren = group.children.filter(c =>
-            isChildVisibleForType(c.id, bType) && (c.id !== 'gl-simulation' || glSimVisible)
+            isChildVisibleForType(c.id, bType, accountingLevel) && (c.id !== 'gl-simulation' || glSimVisible)
           );
           if (!visibleChildren.length) return null;
 

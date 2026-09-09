@@ -81,22 +81,7 @@ export const NAV_CONFIG = [
       { id: 'fixed-assets', label: 'Asset Register & Depreciation', href: '/fixed-assets' }
     ]
   },
-  {
-    id: 'projects',
-    label: 'Projects & Job Costing',
-    moduleId: 'projects',
-    children: [
-      { id: 'projects', label: 'Projects & WIP', href: '/projects-job-costing' }
-    ]
-  },
-  {
-    id: 'fx',
-    label: 'Multi-Currency & FX',
-    moduleId: 'fx',
-    children: [
-      { id: 'fx', label: 'FX Rates & Revaluation', href: '/multi-currency-fx' }
-    ]
-  },
+
   {
     id: 'reporting',
     label: 'Reporting & Analytics',
@@ -111,6 +96,14 @@ export const NAV_CONFIG = [
     moduleId: 'insurance',
     children: [
       { id: 'pas-policy', label: 'Policy Admin & Lifecycle', href: '/pas-policy' }
+    ]
+  },
+  {
+    id: 'pos-operations',
+    label: 'POS Order Admin (POS)',
+    moduleId: 'pizza',
+    children: [
+      { id: 'pos-operations', label: 'POS Event Injector', href: '/pos-operations' }
     ]
   },
   {
@@ -220,7 +213,21 @@ export function modulesForBusinessType(businessTypeId) {
   });
 }
 
-export function isGroupVisibleForType(groupId, businessType) {
+export function isGroupVisibleForType(groupId, businessType, accountingLevel = 'insurance') {
+  // Hide Payroll, Inventory & Costing, and Fixed Assets from sidebar navigation
+  if (['payroll', 'inventory', 'fixed-assets'].includes(groupId)) {
+    return false;
+  }
+
+  if (accountingLevel === 'pizza') {
+    if (groupId === 'pos-operations') return true;
+    const insuranceGroups = ['pas-policy', 'premium-claims', 'subledger', 'reinsurance', 'statutory-reports', 'mga-operations', 'compliance-filings'];
+    if (insuranceGroups.includes(groupId)) return false;
+    return true;
+  }
+
+  if (groupId === 'pos-operations') return false;
+
   if (businessType === 'agency' || businessType === 'broker') {
     const allowed = [
       'dashboard', 'pas-policy', 'commission',
@@ -275,7 +282,12 @@ const BROKER_HIDDEN_CHILD_IDS = ['explore-industries', 'entity-hierarchy', 'manu
 // user-toggleable default (Header's Density & Sizing panel /
 // ThemeContext's showGlSimulation), not a permanent rule. See Sidebar.jsx,
 // which combines this function's result with that toggle.
-export function isChildVisibleForType(childId, businessType) {
+export function isChildVisibleForType(childId, businessType, accountingLevel = 'insurance') {
+  if (accountingLevel === 'pizza') {
+    if (childId === 'gl-simulation') return false;
+  } else {
+    if (childId === 'sales-transactions') return false;
+  }
   if ((businessType === 'agency' || businessType === 'broker') && BROKER_HIDDEN_CHILD_IDS.includes(childId)) {
     return false;
   }

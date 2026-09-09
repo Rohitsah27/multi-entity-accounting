@@ -186,6 +186,19 @@ export function NavIcon({ id, width = 18, height = 18 }) {
           <path d="M160 32v56h56M96 144l20 20 44-44" stroke="currentColor" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
+    case 'pos-operations':
+      return (
+        <svg width={width} height={height} viewBox="0 0 256 256" fill="none">
+          <rect x="40" y="32" width="176" height="192" rx="16" stroke="currentColor" strokeWidth="18" />
+          <rect x="64" y="56" width="128" height="64" rx="8" stroke="currentColor" strokeWidth="18" />
+          <circle cx="80" cy="160" r="12" fill="currentColor" />
+          <circle cx="128" cy="160" r="12" fill="currentColor" />
+          <circle cx="176" cy="160" r="12" fill="currentColor" />
+          <circle cx="80" cy="192" r="12" fill="currentColor" />
+          <circle cx="128" cy="192" r="12" fill="currentColor" />
+          <circle cx="176" cy="192" r="12" fill="currentColor" />
+        </svg>
+      );
     case 'statutory-reports':
       return (
         <svg width={width} height={height} viewBox="0 0 256 256" fill="none">
@@ -342,6 +355,14 @@ export function NavIcon({ id, width = 18, height = 18 }) {
           <circle cx="192" cy="64" r="24" stroke="currentColor" strokeWidth="18"/>
           <circle cx="128" cy="192" r="24" stroke="currentColor" strokeWidth="18"/>
           <path d="M84 76l32 92M172 76l-32 92" stroke="currentColor" strokeWidth="18"/>
+        </svg>
+      );
+    case 'sales-transactions':
+      return (
+        <svg width={width} height={height} viewBox="0 0 256 256" fill="none">
+          <path d="M40 48h24l32 112h112l24-80H72" stroke="currentColor" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="104" cy="196" r="16" stroke="currentColor" strokeWidth="18"/>
+          <circle cx="192" cy="196" r="16" stroke="currentColor" strokeWidth="18"/>
         </svg>
       );
     default:

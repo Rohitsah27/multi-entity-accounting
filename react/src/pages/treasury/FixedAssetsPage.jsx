@@ -52,6 +52,70 @@ export function FixedAssetsPage() {
     });
   }, [assets, categoryFilter, methodFilter, statusFilter, search]);
 
+  // Filtered Totals for Footer Reconciliation
+  const filteredTotals = useMemo(() => {
+    return filteredAssets.reduce(
+      (acc, a) => {
+        acc.cost += a.cost || 0;
+        acc.accumDep += a.accumDep || 0;
+        acc.nbv += a.nbv || 0;
+        return acc;
+      },
+      { cost: 0, accumDep: 0, nbv: 0 }
+    );
+  }, [filteredAssets]);
+
+  // Export CSV Action
+  const handleExportCsv = () => {
+    let csv = 'Asset Tag,Description,Category,Acquired Date,Cost ($),Depreciation Method,Useful Life,Accumulated Depreciation ($),Net Book Value ($),Status\n';
+    filteredAssets.forEach(a => {
+      csv += `"${a.tag}","${a.desc}","${a.category}","${a.acquired}",${a.cost},"${a.method}","${a.life}",${a.accumDep},${a.nbv},"${a.status}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `fixed_assets_register_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Asset register CSV downloaded successfully!', 'success');
+  };
+
+  // Helper for clean method pill styling
+  const getMethodBadge = (method) => {
+    if (method.includes('Straight-Line')) {
+      return { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
+    }
+    if (method.includes('Declining')) {
+      return { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' };
+    }
+    if (method.includes('Sum-of-Years')) {
+      return { bg: '#faf5ff', color: '#7e22ce', border: '#e9d5ff' };
+    }
+    if (method.includes('Units')) {
+      return { bg: '#f0fdfa', color: '#0f766e', border: '#99f6e4' };
+    }
+    if (method.includes('MACRS')) {
+      return { bg: '#f1f5f9', color: '#334155', border: '#cbd5e1' };
+    }
+    return { bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
+  };
+
+  // Helper for clean status pill styling
+  const getStatusBadge = (status) => {
+    if (status === 'In Use') {
+      return { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', dot: '#16a34a' };
+    }
+    if (status === 'Disposed') {
+      return { bg: '#f8fafc', color: '#64748b', border: '#e2e8f0', dot: '#94a3b8' };
+    }
+    if (status === 'Impaired') {
+      return { bg: '#fef2f2', color: '#dc2626', border: '#fecaca', dot: '#dc2626' };
+    }
+    return { bg: '#f1f5f9', color: '#475569', border: '#cbd5e1', dot: '#64748b' };
+  };
+
   const handleRunDepreciation = () => {
     showToast('Running scheduled depreciation batch for August 2026...', 'info');
     setTimeout(() => {
@@ -211,116 +275,450 @@ export function FixedAssetsPage() {
         />
       </div>
 
-      {/* ═══ ASSET REGISTER ═══ */}
-      <div className="table-wrap" style={{ marginBottom: '24px' }}>
-        <div className="table-head-row">
-          <div className="table-head-title">Asset Register</div>
-          <div className="table-head-actions">
-            <button className="btn btn-primary btn-sm" onClick={handleRunDepreciation}>
-              Run Depreciation
+      {/* ═══ ASSET REGISTER CARD & TABLE ═══ */}
+      <div
+        className="table-wrap"
+        style={{
+          background: '#ffffff',
+          border: '1.5px solid var(--gray-200, #e2e8f0)',
+          borderRadius: '12px',
+          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+          overflow: 'hidden',
+          marginBottom: '28px'
+        }}
+      >
+        {/* Table Card Header */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px 20px',
+            borderBottom: '1.5px solid #e2e8f0',
+            background: '#ffffff',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>🏷️</span>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--navy, #0d1b4b)', letterSpacing: '-0.2px' }}>
+                Asset Register
+              </h3>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: '#eff6ff',
+                  color: '#0284c7',
+                  border: '1px solid #bfdbfe'
+                }}
+              >
+                {filteredAssets.length} Assets
+              </span>
+            </div>
+            <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+              Capitalized equipment, vehicles, real estate, and IT assets with active depreciation schedules
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={handleExportCsv}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#334155',
+                borderColor: '#cbd5e1',
+                padding: '6px 12px',
+                borderRadius: '6px'
+              }}
+            >
+              <span>📥</span> Export CSV
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleRunDepreciation}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #ea580c, #c2410c)',
+                border: 'none',
+                color: '#ffffff',
+                padding: '7px 16px',
+                borderRadius: '6px',
+                boxShadow: '0 2px 6px rgba(234, 88, 12, 0.25)',
+                cursor: 'pointer'
+              }}
+            >
+              <span>⚡</span> Run Depreciation
             </button>
           </div>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Asset Tag</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Acquired</th>
-              <th style={{ textAlign: 'right' }}>Cost</th>
-              <th>Method</th>
-              <th>Useful Life</th>
-              <th style={{ textAlign: 'right' }}>Accum. Dep.</th>
-              <th style={{ textAlign: 'right' }}>Net Book Value</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAssets.map((a) => (
-              <tr key={a.tag}>
-                <td className="font-semibold">{a.tag}</td>
-                <td>{a.desc}</td>
-                <td>{a.category}</td>
-                <td>{a.acquired}</td>
-                <td style={{ textAlign: 'right' }}>${a.cost.toLocaleString()}</td>
-                <td>
-                  <span className={`badge ${a.methodBadge}`}>{a.method}</span>
-                </td>
-                <td>{a.life}</td>
-                <td style={{ textAlign: 'right' }}>${a.accumDep.toLocaleString()}</td>
-                <td style={{ textAlign: 'right', fontWeight: 600 }}>${a.nbv.toLocaleString()}</td>
-                <td>
-                  <span className={`badge ${a.statusBadge}`}>{a.status}</span>
-                </td>
-                <td>
-                  {a.status !== 'Disposed' ? (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setDisposeTarget(a)}
-                    >
-                      Dispose
-                    </button>
-                  ) : (
-                    <button className="btn btn-ghost btn-sm" disabled>
-                      Disposed
-                    </button>
-                  )}
-                </td>
+
+        {/* Dedicated Horizontal Scroll Container (prevents text clipping & squishing) */}
+        <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+          <table
+            className="data-table"
+            style={{
+              width: '100%',
+              minWidth: '1220px',
+              borderCollapse: 'collapse',
+              fontSize: '12.5px'
+            }}
+          >
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', textAlign: 'left', color: '#475569' }}>
+                <th style={{ padding: '12px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '110px', whiteSpace: 'nowrap' }}>Asset Tag</th>
+                <th style={{ padding: '12px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: '240px' }}>Description</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: '160px', whiteSpace: 'nowrap' }}>Category</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '110px', whiteSpace: 'nowrap' }}>Acquired</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '120px', whiteSpace: 'nowrap' }}>Cost</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: '180px', whiteSpace: 'nowrap' }}>Method</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '110px', whiteSpace: 'nowrap' }}>Useful Life</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '120px', whiteSpace: 'nowrap' }}>Accum. Dep.</th>
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '130px', whiteSpace: 'nowrap' }}>Net Book Value</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '110px', whiteSpace: 'nowrap' }}>Status</th>
+                <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', width: '110px', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredAssets.length === 0 ? (
+                <tr>
+                  <td colSpan="11" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <div style={{ fontSize: '28px', marginBottom: '8px' }}>🔍</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>No fixed assets found</div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                      Try adjusting your category, depreciation method, or search query.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredAssets.map((a) => {
+                  const methodStyle = getMethodBadge(a.method);
+                  const statusStyle = getStatusBadge(a.status);
+
+                  return (
+                    <tr
+                      key={a.tag}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                    >
+                      {/* Asset Tag */}
+                      <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                        <span
+                          style={{
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            background: '#f1f5f9',
+                            color: '#1e293b',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid #e2e8f0'
+                          }}
+                        >
+                          {a.tag}
+                        </span>
+                      </td>
+
+                      {/* Description */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>
+                          {a.desc}
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            padding: '3px 9px',
+                            borderRadius: '6px',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#334155',
+                            fontWeight: 600
+                          }}
+                        >
+                          {a.category}
+                        </span>
+                      </td>
+
+                      {/* Acquired */}
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap', color: '#475569', fontSize: '12px' }}>
+                        {a.acquired}
+                      </td>
+
+                      {/* Cost */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#0f172a', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        ${a.cost.toLocaleString()}
+                      </td>
+
+                      {/* Method */}
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '3px 9px',
+                            borderRadius: '4px',
+                            background: methodStyle.bg,
+                            color: methodStyle.color,
+                            border: `1px solid ${methodStyle.border}`,
+                            letterSpacing: '0.2px'
+                          }}
+                        >
+                          {a.method}
+                        </span>
+                      </td>
+
+                      {/* Useful Life */}
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap', color: '#475569', fontSize: '12px' }}>
+                        {a.life}
+                      </td>
+
+                      {/* Accum. Dep. */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right', color: '#64748b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        ${a.accumDep.toLocaleString()}
+                      </td>
+
+                      {/* Net Book Value */}
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: a.nbv === 0 ? '#94a3b8' : '#0369a1', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        ${a.nbv.toLocaleString()}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '3px 9px',
+                            borderRadius: '12px',
+                            background: statusStyle.bg,
+                            color: statusStyle.color,
+                            border: `1px solid ${statusStyle.border}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          <span style={{ fontSize: '9px', color: statusStyle.dot }}>●</span>
+                          {a.status}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {a.status !== 'Disposed' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => setDisposeTarget(a)}
+                            style={{
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              padding: '4px 11px',
+                              background: '#fff7ed',
+                              border: '1px solid #fed7aa',
+                              color: '#ea580c',
+                              borderRadius: '5px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span>🗑️</span> Dispose
+                          </button>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              padding: '4px 11px',
+                              background: '#f1f5f9',
+                              border: '1px solid #e2e8f0',
+                              color: '#94a3b8',
+                              borderRadius: '5px'
+                            }}
+                          >
+                            Disposed
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {filteredAssets.length > 0 && (
+              <tfoot>
+                <tr style={{ background: '#f8fafc', borderTop: '2px solid #cbd5e1', fontWeight: 700, color: '#0f172a' }}>
+                  <td colSpan="4" style={{ padding: '13px 16px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#334155' }}>
+                      Total Filtered Portfolio ({filteredAssets.length} Assets)
+                    </span>
+                  </td>
+                  <td style={{ padding: '13px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 800 }}>
+                    ${filteredTotals.cost.toLocaleString()}
+                  </td>
+                  <td colSpan="2" style={{ padding: '13px 14px' }}></td>
+                  <td style={{ padding: '13px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: '#64748b' }}>
+                    ${filteredTotals.accumDep.toLocaleString()}
+                  </td>
+                  <td style={{ padding: '13px 16px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: '#0369a1' }}>
+                    ${filteredTotals.nbv.toLocaleString()}
+                  </td>
+                  <td colSpan="2" style={{ padding: '13px 16px' }}></td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
-      {/* ═══ DISPOSE PANEL ═══ */}
+      {/* ═══ MODAL: ASSET DISPOSAL ═══ */}
       {disposeTarget && (
-        <div className="card" style={{ padding: '18px 20px', marginBottom: '24px' }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0d1b4b', marginBottom: '12px' }}>
-            Dispose Asset - <span>{disposeTarget.tag} ({disposeTarget.desc})</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-            <div className="form-field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Disposal Date</label>
-              <input
-                type="date"
-                className="field-input"
-                value={disposeDate}
-                onChange={(e) => setDisposeDate(e.target.value)}
-              />
-            </div>
-            <div className="form-field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Disposal Method</label>
-              <select
-                className="field-input"
-                value={disposeMethod}
-                onChange={(e) => setDisposeMethod(e.target.value)}
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              width: '100%',
+              maxWidth: '520px',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: 'var(--navy, #0d1b4b)' }}>
+                  Dispose Capital Asset
+                </h3>
+                <div style={{ fontSize: '12.5px', color: '#64748b', marginTop: '2px' }}>
+                  {disposeTarget.tag} — {disposeTarget.desc}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDisposeTarget(null)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#94a3b8' }}
               >
-                <option value="Sale">Sale</option>
-                <option value="Scrap">Scrap</option>
-                <option value="Trade-In">Trade-In</option>
-                <option value="Write-Off">Write-Off</option>
-              </select>
+                ✕
+              </button>
             </div>
-            <div className="form-field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Disposal Proceeds</label>
-              <input
-                type="text"
-                className="field-input"
-                placeholder="$0.00"
-                value={disposeProceeds}
-                onChange={(e) => setDisposeProceeds(e.target.value)}
-              />
+
+            <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Original Cost</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>${disposeTarget.cost.toLocaleString()}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Accum. Depr.</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>${disposeTarget.accumDep.toLocaleString()}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Current NBV</div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0284c7', marginTop: '2px' }}>${disposeTarget.nbv.toLocaleString()}</div>
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button className="btn btn-outline" onClick={() => setDisposeTarget(null)}>
-              Cancel
-            </button>
-            <button className="btn btn-primary" onClick={handleConfirmDisposal}>
-              Confirm Disposal
-            </button>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', marginBottom: '20px' }}>
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label className="field-label" style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Disposal Date
+                </label>
+                <input
+                  type="date"
+                  className="field-input"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  value={disposeDate}
+                  onChange={(e) => setDisposeDate(e.target.value)}
+                />
+              </div>
+
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label className="field-label" style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Disposal Method
+                </label>
+                <select
+                  className="field-input"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  value={disposeMethod}
+                  onChange={(e) => setDisposeMethod(e.target.value)}
+                >
+                  <option value="Sale">Sale (Proceeds to Cash)</option>
+                  <option value="Scrap">Scrap (Write-off Remaining NBV)</option>
+                  <option value="Trade-In">Trade-In (Exchange for New Asset)</option>
+                  <option value="Write-Off">Write-Off (Impairment / Loss)</option>
+                </select>
+              </div>
+
+              <div className="form-field" style={{ marginBottom: 0 }}>
+                <label className="field-label" style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Disposal Proceeds ($)
+                </label>
+                <input
+                  type="text"
+                  className="field-input"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  placeholder="$0.00"
+                  value={disposeProceeds}
+                  onChange={(e) => setDisposeProceeds(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 600 }}
+                onClick={() => setDisposeTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', background: '#ea580c', color: '#ffffff', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}
+                onClick={handleConfirmDisposal}
+              >
+                Confirm Disposal &amp; Post to GL
+              </button>
+            </div>
           </div>
         </div>
       )}

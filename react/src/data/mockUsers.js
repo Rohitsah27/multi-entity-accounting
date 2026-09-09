@@ -88,6 +88,75 @@ export const MOCK_USERS = [
     statutoryFiling: 'Bermuda BMA Class 4',
     trustBalance: 3200000.00,
     operatingBalance: 1540000.00
+  },
+
+  // Generic multi-entity demo (Pizza franchise scenario) — added alongside
+  // the insurance demo users above, not replacing them, so the existing
+  // insurance flow (kept in the app, just unlinked from nav) stays fully
+  // reachable by anyone who logs in as one of the accounts above.
+  {
+    email: 'hub@pizza.demo',
+    name: 'Jordan Blake',
+    role: 'hub-admin',
+    roleLabel: 'Main Hub Administrator',
+    entityId: 'ENT-HUB-01',
+    entityName: 'Main Hub',
+    businessType: 'hub',
+    businessLabel: 'Franchise Main Hub',
+    avatarColor: '#0369A1',
+    initials: 'MH',
+    accountingLevel: 'pizza',
+    statutoryFiling: 'EIN 84-2210091',
+    trustBalance: 0,
+    operatingBalance: 0
+  },
+  {
+    email: 'franchise@pizza.demo',
+    name: 'Marco Rossi',
+    role: 'franchise-owner',
+    roleLabel: 'Franchise Store Owner',
+    entityId: 'ENT-FRN-01',
+    entityName: 'Franchise Store #12',
+    businessType: 'franchise',
+    businessLabel: 'Franchise-Owned Store',
+    avatarColor: '#F97316',
+    initials: 'FS',
+    accountingLevel: 'pizza',
+    statutoryFiling: 'Business License #BL-55210',
+    trustBalance: 0,
+    operatingBalance: 0
+  },
+  {
+    email: 'ownstore@pizza.demo',
+    name: 'Priya Nair',
+    role: 'ownstore-manager',
+    roleLabel: 'Own Store Manager',
+    entityId: 'ENT-OWN-01',
+    entityName: 'Own Store #1',
+    businessType: 'ownstore',
+    businessLabel: 'Company-Owned Store',
+    avatarColor: '#10B981',
+    initials: 'OS',
+    accountingLevel: 'pizza',
+    statutoryFiling: 'Business License #BL-55211',
+    trustBalance: 0,
+    operatingBalance: 0
+  },
+  {
+    email: 'customer@pizza.demo',
+    name: 'Ayushi',
+    role: 'customer',
+    roleLabel: 'Retail Pizza Customer',
+    entityId: 'ENT-CUST-AYUSHI',
+    entityName: 'Customer Ayushi',
+    businessType: 'customer',
+    businessLabel: 'Retail Consumer',
+    avatarColor: '#EC4899',
+    initials: 'AY',
+    accountingLevel: 'pizza',
+    statutoryFiling: 'POS Consumer',
+    trustBalance: 0,
+    operatingBalance: 0
   }
 ];
 

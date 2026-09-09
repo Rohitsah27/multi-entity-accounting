@@ -69,22 +69,77 @@ export function AuthProvider({ children }) {
     }
   }, [currentUser]);
 
+  const [accountingLevel, setAccountingLevelState] = useState(() => {
+    try {
+      return sessionStorage.getItem('v_accounting_level') || localStorage.getItem('v_accounting_level') || 'insurance';
+    } catch {
+      return 'insurance';
+    }
+  });
+
+  const setAccountingLevel = (level) => {
+    const nextLevel = level === 'pizza' ? 'pizza' : 'insurance';
+    setAccountingLevelState(nextLevel);
+    sessionStorage.setItem('v_accounting_level', nextLevel);
+    localStorage.setItem('v_accounting_level', nextLevel);
+
+    if (nextLevel === 'pizza') {
+      const pizzaEmails = ['hub@pizza.demo', 'franchise@pizza.demo', 'ownstore@pizza.demo', 'customer@pizza.demo'];
+      if (!pizzaEmails.includes(currentUser?.email?.toLowerCase())) {
+        const defaultPizzaUser = users.find(u => u.email === 'hub@pizza.demo') || users.find(u => u.accountingLevel === 'pizza') || MOCK_USERS.find(u => u.email === 'hub@pizza.demo');
+        if (defaultPizzaUser) {
+          setCurrentUser(defaultPizzaUser);
+          sessionStorage.setItem('v_user', JSON.stringify(defaultPizzaUser));
+        }
+      }
+    } else {
+      const pizzaEmails = ['hub@pizza.demo', 'franchise@pizza.demo', 'ownstore@pizza.demo', 'customer@pizza.demo'];
+      if (pizzaEmails.includes(currentUser?.email?.toLowerCase())) {
+        const defaultInsuranceUser = users.find(u => u.email === 'carrier@gmail.com') || users.find(u => u.accountingLevel === 'insurance') || MOCK_USERS[1];
+        if (defaultInsuranceUser) {
+          setCurrentUser(defaultInsuranceUser);
+          sessionStorage.setItem('v_user', JSON.stringify(defaultInsuranceUser));
+        }
+      }
+    }
+  };
+
   // Derived Active Entity
   const activeEntity = useMemo(() => {
-    return {
-      id: currentUser.entityId || 'ENT-CAR-01',
-      name: currentUser.entityName || 'Southlake Insurance Co.',
-      role: currentUser.role || 'Carrier Executive',
-      businessType: (currentUser.role || '').toLowerCase().includes('mga')
-        ? 'mga'
-        : (currentUser.role || '').toLowerCase().includes('broker') || (currentUser.role || '').toLowerCase().includes('agency')
-        ? 'agency'
-        : 'carrier'
-    };
-  }, [currentUser]);
+    const isPizza = accountingLevel === 'pizza';
+    const fallbackId = isPizza ? 'ENT-HUB-01' : 'ENT-CAR-01';
+    const fallbackName = isPizza ? "Domino's Main Company" : 'Southlake Insurance Co.';
+    const fallbackRole = isPizza ? 'Main Company Controller' : 'Carrier Executive';
 
-  const login = async (email, password, remember = false) => {
+    let businessType = currentUser?.businessType;
+    if (!businessType) {
+      businessType = (currentUser?.role || '').toLowerCase().includes('mga')
+        ? 'mga'
+        : (currentUser?.role || '').toLowerCase().includes('broker') || (currentUser?.role || '').toLowerCase().includes('agency')
+        ? 'agency'
+        : isPizza ? 'hub' : 'carrier';
+    }
+
+    return {
+      id: currentUser?.entityId || fallbackId,
+      name: currentUser?.entityName || fallbackName,
+      role: currentUser?.roleLabel || currentUser?.role || fallbackRole,
+      businessType
+    };
+  }, [currentUser, accountingLevel]);
+
+  const login = async (email, password, remember = false, targetLevel = null) => {
     const trimmed = (email || '').trim().toLowerCase();
+
+    // Determine target accounting level
+    let detectedLevel = targetLevel;
+    if (!detectedLevel) {
+      const pizzaEmails = ['hub@pizza.demo', 'franchise@pizza.demo', 'ownstore@pizza.demo', 'customer@pizza.demo'];
+      detectedLevel = pizzaEmails.includes(trimmed) ? 'pizza' : 'insurance';
+    }
+    setAccountingLevelState(detectedLevel);
+    sessionStorage.setItem('v_accounting_level', detectedLevel);
+    localStorage.setItem('v_accounting_level', detectedLevel);
 
     // Try backend authentication first
     try {
@@ -118,6 +173,11 @@ export function AuthProvider({ children }) {
   const switchRole = (emailOrRole) => {
     const target = users.find(u => u.email === emailOrRole || u.role === emailOrRole || u.entityId === emailOrRole);
     if (target) {
+      if (target.accountingLevel) {
+        setAccountingLevelState(target.accountingLevel);
+        sessionStorage.setItem('v_accounting_level', target.accountingLevel);
+        localStorage.setItem('v_accounting_level', target.accountingLevel);
+      }
       setCurrentUser(target);
       sessionStorage.setItem('v_user', JSON.stringify(target));
       localStorage.setItem('v_user', JSON.stringify(target));
@@ -182,6 +242,8 @@ export function AuthProvider({ children }) {
       currentUser,
       activeEntity,
       isAuthenticated,
+      accountingLevel,
+      setAccountingLevel,
       login,
       logout,
       switchRole,

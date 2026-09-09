@@ -49,10 +49,35 @@ export function FinanceProvider({ children }) {
   // currently logged in. This is what makes "switch role, see different
   // numbers" actually true, matching the multi-entity lifecycle documented
   // in finance-and-accounting-main/README.md.
-  const { activeEntity } = useAuth();
+  const { currentUser, activeEntity, accountingLevel } = useAuth();
+  const currentAccountingLevel = accountingLevel || currentUser?.accountingLevel || (() => {
+    try {
+      return sessionStorage.getItem('v_accounting_level') || localStorage.getItem('v_accounting_level') || 'insurance';
+    } catch {
+      return 'insurance';
+    }
+  })() || 'insurance';
+
+  const PIZZA_ENTITY_IDS = ['ENT-HUB-01', 'ENT-FRN-01', 'ENT-OWN-01', 'ENT-CUST-AYUSHI'];
+  const INSURANCE_ENTITY_IDS = ['ENT-CAR-01', 'ENT-MGA-01', 'ENT-AGY-01', 'ENT-RE-01', 'INS-AYUSHI', 'ENT-MINE'];
+
+  const isJeForCurrentLevel = useCallback((je) => {
+    if (!je) return false;
+    if (je.accountingLevel) {
+      return je.accountingLevel === currentAccountingLevel;
+    }
+    if (currentAccountingLevel === 'pizza') {
+      return PIZZA_ENTITY_IDS.includes(je.entity);
+    }
+    return !PIZZA_ENTITY_IDS.includes(je.entity);
+  }, [currentAccountingLevel]);
+
   const belongsToActiveEntity = useCallback(
-    (je) => !activeEntity?.id || je.entity === activeEntity.id,
-    [activeEntity]
+    (je) => {
+      if (!isJeForCurrentLevel(je)) return false;
+      return !activeEntity?.id || je.entity === activeEntity.id;
+    },
+    [activeEntity, isJeForCurrentLevel]
   );
 
   // When true, a "Reset Data" wipe is in effect: trust whatever's cached
@@ -124,7 +149,32 @@ export function FinanceProvider({ children }) {
           return parsed;
         }
         if (Array.isArray(parsed) && parsed.length > 0 && !parsed.some(j => (j.lines || []).some(l => l.accountCode === '1002' || l.acct === '1002'))) {
-          return parsed;
+          // Condition-based correction for Franchise Remittance (JE 4 & JE 5):
+          // Scenario 1 (Franchise 70/30): Franchise retains $70 (70%) and pays Main Hub $30 (30% corporate royalty).
+          // Scenario 2 (Own Store 100%): Own Store is 100% owned by Main Hub, so it remits $100.
+          const corrected = parsed.map(j => {
+            const desc = j.description || '';
+            const isFranchiseRemit = desc.includes('JE 4') && desc.includes('Franchise pays Main Hub');
+            const isFranchiseHubReceipt = desc.includes('JE 5') && desc.includes('Franchise');
+            if (isFranchiseRemit || isFranchiseHubReceipt) {
+              const hasHundred = (j.lines || []).some(l => Number(l.debit) === 100 || Number(l.credit) === 100);
+              if (hasHundred) {
+                return {
+                  ...j,
+                  lines: (j.lines || []).map(l => ({
+                    ...l,
+                    debit: Number(l.debit) > 0 ? 30 : 0,
+                    credit: Number(l.credit) > 0 ? 30 : 0
+                  }))
+                };
+              }
+            }
+            return j;
+          });
+          try {
+            localStorage.setItem('v_gl_journal_entries', JSON.stringify(corrected));
+          } catch (e) {}
+          return corrected;
         }
       }
     } catch (e) {
@@ -443,6 +493,10 @@ export function FinanceProvider({ children }) {
 
   useEffect(() => {
     syncWithBackend();
+    const interval = setInterval(() => {
+      syncWithBackend();
+    }, 12000);
+    return () => clearInterval(interval);
   }, [syncWithBackend]);
 
   // ============================================================
@@ -539,7 +593,7 @@ export function FinanceProvider({ children }) {
 
   // Dynamically compute live balance for an account code
   const getAccountBalance = (code) => {
-    const ob = openingBalances[code] || { debit: 0, credit: 0 };
+    const ob = currentAccountingLevel === 'pizza' ? { debit: 0, credit: 0 } : (openingBalances[code] || { debit: 0, credit: 0 });
     let totalDebit = ob.debit || 0;
     let totalCredit = ob.credit || 0;
 
@@ -565,7 +619,7 @@ export function FinanceProvider({ children }) {
 
   // Get chronological transaction audit trail
   const getAccountLedger = (code) => {
-    const ob = openingBalances[code] || { debit: 0, credit: 0 };
+    const ob = currentAccountingLevel === 'pizza' ? { debit: 0, credit: 0 } : (openingBalances[code] || { debit: 0, credit: 0 });
     const openingNet = (ob.debit || 0) - (ob.credit || 0);
     const rows = [];
 
@@ -610,8 +664,9 @@ export function FinanceProvider({ children }) {
     // Default to whichever role is currently logged in — each entity keeps
     // its own book, so an entry created without an explicit entity belongs
     // to the person creating it, not a hardcoded default.
-    const entity = newEntry.entity || activeEntity?.id || 'ENT-MGA-01';
-    const entityName = newEntry.entityName || activeEntity?.name || 'NTA Program Administrators';
+    const entity = newEntry.entity || activeEntity?.id || (currentAccountingLevel === 'pizza' ? 'ENT-FRN-01' : 'ENT-MGA-01');
+    const entityName = newEntry.entityName || activeEntity?.name || (currentAccountingLevel === 'pizza' ? "Domino's Franchise Store #12" : 'NTA Program Administrators');
+    const entryAccountingLevel = newEntry.accountingLevel || currentAccountingLevel;
 
     const entry = {
       ...newEntry,
@@ -620,6 +675,7 @@ export function FinanceProvider({ children }) {
       date: newEntry.date || new Date().toISOString().slice(0, 10),
       entity,
       entityName,
+      accountingLevel: entryAccountingLevel,
       createdAt: new Date().toISOString()
     };
     setJournalEntries(prev => [entry, ...prev]);
@@ -676,13 +732,191 @@ export function FinanceProvider({ children }) {
   };
 
   // ============================================================
+  // DOMINO'S PIZZA & MULTI-LEVEL ACCOUNTING ENGINE
+  // ============================================================
+  const [franchiseSharePct, setFranchiseSharePctState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('v_pizza_franchise_share_pct');
+      if (saved !== null && saved !== '30') {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0 && val <= 100) return val;
+      }
+    } catch {}
+    return 70; // Default 70% franchise ($70) / 30% Domino's Main Hub ($30)
+  });
+
+  const setFranchiseSharePct = useCallback((val) => {
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (isNaN(num)) throw new Error('Franchise share must be a valid number');
+    if (num < 0 || num > 100) throw new Error('Franchise share must be between 0% and 100%');
+    setFranchiseSharePctState(num);
+    try {
+      localStorage.setItem('v_pizza_franchise_share_pct', String(num));
+    } catch {}
+  }, []);
+
+  const dominosSharePct = useMemo(() => Math.max(0, Math.min(100, 100 - franchiseSharePct)), [franchiseSharePct]);
+
+  const recordPizzaSale = useCallback(({
+    customerName = 'Ayushi',
+    pizzaItem = 'Large Pepperoni & Cheese Farmhouse Pizza',
+    saleAmount = 100.00,
+    franchiseEntityId = 'ENT-FRN-01',
+    franchiseName = "Domino's Franchise Store #12",
+    dominosEntityId = 'ENT-HUB-01',
+    dominosName = "Domino's Main Company"
+  } = {}) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const franchiseShare = Math.round((saleAmount * franchiseSharePct / 100) * 100) / 100;
+    const dominosShare = Math.round((saleAmount * dominosSharePct / 100) * 100) / 100;
+
+    // 1. Franchise Store Journal Entry:
+    const franchiseSaleJe = addJournalEntry({
+      date: today,
+      reference: `POS-SALE-${customerName.toUpperCase()}`,
+      description: `POS Pizza Sale to ${customerName} (${pizzaItem}) — Store #12`,
+      entity: franchiseEntityId,
+      entityName: franchiseName,
+      accountingLevel: 'pizza',
+      status: 'Posted',
+      lines: [
+        { accountCode: '1001', accountName: 'Cash / Bank (Operating Account)', debit: saleAmount, credit: 0, description: `Customer ${customerName} cash receipt` },
+        { accountCode: '4500', accountName: 'Pizza Sales Revenue', debit: 0, credit: saleAmount, description: `Gross sale revenue: ${pizzaItem}` },
+        { accountCode: '5300', accountName: 'Franchise Revenue Share Expense', debit: dominosShare, credit: 0, description: `Dominos Main Company ${dominosSharePct}% revenue share expense` },
+        { accountCode: '2050', accountName: `Due to ${dominosName}`, debit: 0, credit: dominosShare, description: `Intercompany payable due to ${dominosName}` }
+      ]
+    });
+
+    // 2. Domino's Main Company Journal Entry:
+    const dominosIncomeJe = addJournalEntry({
+      date: today,
+      reference: `REV-SHARE-${customerName.toUpperCase()}`,
+      description: `Revenue Share (${dominosSharePct}%) recognized from ${franchiseName} on customer sale`,
+      entity: dominosEntityId,
+      entityName: dominosName,
+      accountingLevel: 'pizza',
+      status: 'Posted',
+      lines: [
+        { accountCode: '1180', accountName: `Due from ${franchiseName}`, debit: dominosShare, credit: 0, description: `Intercompany receivable due from ${franchiseName}` },
+        { accountCode: '4600', accountName: 'Franchise Revenue Share Income', debit: 0, credit: dominosShare, description: `Dominos Main Company revenue share income (${dominosSharePct}%)` }
+      ]
+    });
+
+    // 3. Create Franchise Store AP invoice payable to Domino's Main Company
+    const shareBill = {
+      id: `INV-AP-FRN-SHARE-${Date.now()}`,
+      vendor: dominosName,
+      policyNumber: '',
+      amount: dominosShare,
+      dueDate: today,
+      status: 'Awaiting Settlement',
+      description: `Franchise Revenue Share payable to ${dominosName} (${dominosSharePct}% of ₹${saleAmount})`,
+      entity: franchiseEntityId,
+      entityName: franchiseName,
+      counterpartyEntity: { id: dominosEntityId, name: dominosName },
+      glAcct: '2050',
+      counterpartyReceivableAcct: '1180',
+      matchStatus: '3-Way Matched'
+    };
+    setApInvoices(prev => [shareBill, ...prev]);
+    api.createInvoice({
+      id: shareBill.id,
+      invoiceNumber: shareBill.id,
+      direction: 'AP',
+      partnerName: shareBill.vendor,
+      amount: shareBill.amount,
+      dueDate: shareBill.dueDate,
+      entity: shareBill.entity,
+      entityName: shareBill.entityName,
+      status: shareBill.status,
+      matchStatus: shareBill.matchStatus
+    }).catch(() => {});
+
+    return {
+      saleAmount,
+      franchiseShare,
+      dominosShare,
+      franchiseSharePct,
+      dominosSharePct,
+      franchiseSaleJe,
+      dominosIncomeJe,
+      shareBill
+    };
+  }, [addJournalEntry, franchiseSharePct, dominosSharePct]);
+
+  const settlePizzaSale = useCallback((targetBillId) => {
+    const bill = targetBillId
+      ? apInvoices.find(b => b.id === targetBillId)
+      : apInvoices.find(b => b.id.startsWith('INV-AP-FRN-SHARE') && b.status !== 'Paid & Cleared');
+    if (!bill) {
+      throw new Error('No unsettled pizza sale bill found.');
+    }
+    if (bill.status === 'Paid & Cleared') {
+      return { alreadySettled: true, bill };
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const dominosName = bill.counterpartyEntity?.name || "Domino's Main Company";
+
+    // 1. Franchise Store Settlement Entry:
+    const franchiseSettlementJe = addJournalEntry({
+      date: today,
+      reference: `Bill Payment ${bill.id}`,
+      description: `Settlement — ${bill.entityName} pays ${dominosName} ₹${bill.amount.toLocaleString()}`,
+      entity: bill.entity,
+      entityName: bill.entityName,
+      accountingLevel: 'pizza',
+      status: 'Posted',
+      lines: [
+        { accountCode: '2050', accountName: `Due to ${dominosName}`, debit: bill.amount, credit: 0, description: `Clear Due to ${dominosName}` },
+        { accountCode: '1001', accountName: 'Cash / Bank (Operating Account)', debit: 0, credit: bill.amount, description: 'Cash Disbursed' }
+      ]
+    });
+
+    // 2. Domino's Main Company Settlement Entry:
+    const dominosSettlementJe = addJournalEntry({
+      date: today,
+      reference: `Bill Payment ${bill.id}`,
+      description: `Cash Receipt from ${bill.entityName} — Settlement ${bill.id}`,
+      entity: bill.counterpartyEntity?.id || 'ENT-HUB-01',
+      entityName: dominosName,
+      accountingLevel: 'pizza',
+      status: 'Posted',
+      lines: [
+        { accountCode: '1001', accountName: 'Cash / Bank (Operating Account)', debit: bill.amount, credit: 0, description: 'Cash Received' },
+        { accountCode: '1180', accountName: `Due from ${bill.entityName}`, debit: 0, credit: bill.amount, description: `Clear Due from ${bill.entityName}` }
+      ]
+    });
+
+    setApInvoices(prev => prev.map(b => b.id === bill.id ? { ...b, status: 'Paid & Cleared', paidDate: today } : b));
+    api.payInvoice(bill.id, bill.amount, 'Paid & Cleared').catch(() => {});
+
+    return {
+      bill,
+      franchiseSettlementJe,
+      dominosSettlementJe,
+      amountSettled: bill.amount
+    };
+  }, [apInvoices, addJournalEntry]);
+
+  // ============================================================
   // FINANCIAL STATEMENTS & CALCULATIONS ENGINE
   // ============================================================
+  const PIZZA_ACCOUNT_CODES = ['1001', '1002', '1100', '1180', '1500', '2001', '2050', '3100', '3200', '4500', '4600', '5300', '5400', '5500'];
+  const INSURANCE_ACCOUNT_CODES = ['1001', '1100', '1400', '1500', '2100', '2200', '2300', '2400', '3100', '3200', '4100', '4500', '5100', '5101', '5200', '5500'];
+
+  const levelAccounts = useMemo(() => {
+    if (currentAccountingLevel === 'pizza') {
+      return accounts.filter(a => PIZZA_ACCOUNT_CODES.includes(a.code));
+    }
+    return accounts.filter(a => INSURANCE_ACCOUNT_CODES.includes(a.code));
+  }, [accounts, currentAccountingLevel]);
+
   const getTrialBalance = () => {
     let totalDebit = 0;
     let totalCredit = 0;
 
-    const rows = accounts.map(a => {
+    const rows = levelAccounts.map(a => {
       const bal = getAccountBalance(a.code);
       const isDebitNormal = a.normalBalance === 'Debit';
       const debitVal = isDebitNormal ? (bal.net >= 0 ? bal.net : 0) : 0;
@@ -717,7 +951,7 @@ export function FinanceProvider({ children }) {
     const liabilityRows = [];
     const equityRows = [];
 
-    accounts.forEach(a => {
+    levelAccounts.forEach(a => {
       const bal = getAccountBalance(a.code);
       const amount = Math.abs(bal.net);
 
@@ -750,7 +984,7 @@ export function FinanceProvider({ children }) {
     const revenueRows = [];
     const expenseRows = [];
 
-    accounts.forEach(a => {
+    levelAccounts.forEach(a => {
       const bal = getAccountBalance(a.code);
       const amount = Math.abs(bal.net);
 
@@ -1200,7 +1434,18 @@ export function FinanceProvider({ children }) {
   // which does the same against MongoDB. Login credentials are unaffected —
   // this only clears financial state, not AuthContext's users.
   const clearAllData = () => {
-    try { localStorage.setItem('v_data_reset', '1'); } catch (e) {}
+    try {
+      localStorage.setItem('v_data_reset', '1');
+      localStorage.setItem('v_pos_injected_events', '[]');
+      localStorage.removeItem('v_pos_injected_events');
+      localStorage.removeItem('v_ar_invoices_data');
+      localStorage.removeItem('v_ap_invoices_data');
+      localStorage.removeItem('v_commission_transactions');
+      localStorage.removeItem('v_insurance_simulation_state');
+      localStorage.removeItem('v_sim_policies');
+      localStorage.removeItem('v_sim_parties');
+      localStorage.removeItem('v_compliance_filings');
+    } catch (e) {}
     // Keep the Chart of Accounts structure (code/name/type/dimensions) —
     // only clear what's posted against it. Emptying the accounts list
     // entirely breaks the app: there'd be nothing left for a new journal
@@ -1220,6 +1465,11 @@ export function FinanceProvider({ children }) {
       brokerTrust: 0,
       brokerOperating: 0
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('veridex:data-reset'));
+      window.dispatchEvent(new Event('veridex:pos-events-reset'));
+      window.dispatchEvent(new Event('veridex:pas-events-reset'));
+    }
   };
 
   // The current role's own book — what Journal Entry / Bulk Upload History
@@ -1267,9 +1517,19 @@ export function FinanceProvider({ children }) {
       reverseJournalEntry,
 
       // Financial Reports
+      levelAccounts,
       getTrialBalance,
       getBalanceSheet,
       getProfitAndLoss,
+
+      // Domino's Pizza & Multi-Level Accounting Engine
+      currentAccountingLevel,
+      accountingLevel: currentAccountingLevel,
+      franchiseSharePct,
+      setFranchiseSharePct,
+      dominosSharePct,
+      recordPizzaSale,
+      settlePizzaSale,
 
       // Fiscal periods & locks
       fiscalPeriods,

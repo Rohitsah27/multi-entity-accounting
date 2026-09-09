@@ -140,6 +140,59 @@ export const MOCK_ACCOUNTS = [
     createdBy: 'System (seed)'
   },
 
+  // Generic multi-entity accounts (Pizza/franchise demo and beyond) — new
+  // codes, deliberately not reusing 4100/5100 etc. so the existing insurance
+  // PAS flow (still functional, just unlinked from nav) keeps showing its
+  // own correct account names.
+  {
+    code: '1180',
+    name: 'Due from Stores (Intercompany Receivable)',
+    group: 'asset',
+    type: 'Asset',
+    dimensions: ['cost-center'],
+    status: 'active',
+    normalBalance: 'Debit',
+    balance: 0,
+    createdAt: '2026-08-01T09:00:00.000Z',
+    createdBy: 'System (seed)'
+  },
+  {
+    code: '2050',
+    name: 'Due to Main Hub (Intercompany Payable)',
+    group: 'liability',
+    type: 'Liability',
+    dimensions: ['cost-center'],
+    status: 'active',
+    normalBalance: 'Credit',
+    balance: 0,
+    createdAt: '2026-08-01T09:00:00.000Z',
+    createdBy: 'System (seed)'
+  },
+  {
+    code: '4600',
+    name: 'Franchise Revenue Share Income',
+    group: 'revenue',
+    type: 'Revenue',
+    dimensions: ['cost-center'],
+    status: 'active',
+    normalBalance: 'Credit',
+    balance: 0,
+    createdAt: '2026-08-01T09:00:00.000Z',
+    createdBy: 'System (seed)'
+  },
+  {
+    code: '5300',
+    name: 'Revenue Share Expense',
+    group: 'expense',
+    type: 'Expense',
+    dimensions: ['cost-center'],
+    status: 'active',
+    normalBalance: 'Debit',
+    balance: 0,
+    createdAt: '2026-08-01T09:00:00.000Z',
+    createdBy: 'System (seed)'
+  },
+
   // 4100 Series: REVENUE
   {
     code: '4100',
