@@ -3,13 +3,23 @@
   "version": "1.7.0",
   "private": true,
   "description": "Veridex Insurance & Finance Management System - Full Stack MERN Prototype",
+  "type": "module",
   "scripts": {
+    "start": "node server.js",
+    "build": "npm --prefix react install && npm --prefix react run build",
     "server": "npm --prefix server start",
     "server:dev": "npm --prefix server run dev",
     "client": "npm --prefix react run dev",
     "build:client": "npm --prefix react run build",
     "test:db": "npm --prefix server run test-db",
     "seed": "npm --prefix server run seed"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.10.1",
+    "morgan": "^1.10.0"
   },
   "keywords": [
     "veridex",
