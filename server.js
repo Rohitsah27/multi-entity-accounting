@@ -7,5 +7,5 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, 'server', '.env') });
 dotenv.config();
 
-// Launch the backend server
-import './server/server.js';
+// Launch the backend server after environment variables are loaded
+await import('./server/server.js');

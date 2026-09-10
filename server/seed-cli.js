@@ -10,6 +10,7 @@ import BankTransaction from './models/BankTransaction.js';
 import User from './models/User.js';
 import Invoice from './models/Invoice.js';
 import PasEvent from './models/PasEvent.js';
+import PosEvent from './models/PosEvent.js';
 import CommissionTransaction from './models/CommissionTransaction.js';
 import {
   SEED_ACCOUNTS,
@@ -40,6 +41,7 @@ export async function seedDatabase(clean = false) {
         User.deleteMany({}),
         Invoice.deleteMany({}),
         PasEvent.deleteMany({}),
+        PosEvent.deleteMany({}),
         CommissionTransaction.deleteMany({})
       ]);
       console.log('[Seed] Existing collections cleared.');
@@ -135,6 +137,7 @@ export async function resetDataKeepUsers() {
     BankTransaction.deleteMany({}),
     Invoice.deleteMany({}),
     PasEvent.deleteMany({}),
+    PosEvent.deleteMany({}),
     CommissionTransaction.deleteMany({})
   ]);
 
@@ -157,6 +160,7 @@ export async function resetDataKeepUsers() {
       journalEntries: 0,
       invoices: 0,
       pasEvents: 0,
+      posEvents: 0,
       commissionTransactions: 0,
       users: seededUsers
     }

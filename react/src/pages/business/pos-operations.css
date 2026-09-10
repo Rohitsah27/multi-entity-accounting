@@ -232,12 +232,12 @@
   box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.2);
 }
 
-/* 2-Col Layout with Balanced Widths & Matching Card Heights */
+/* 2-Col Layout with Balanced Widths & Natural Heights */
 .pos-injector-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 @media (max-width: 1080px) {
@@ -258,7 +258,6 @@
   margin-bottom: 18px;
   display: flex;
   flex-direction: column;
-  height: 100%;
   box-sizing: border-box;
 }
 
@@ -367,8 +366,6 @@
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 .pos-code-header {
@@ -390,10 +387,7 @@
   font-size: 11.5px;
   line-height: 1.54;
   color: #e2e8f0;
-  flex: 1;
-  height: 100%;
-  min-height: 420px;
-  max-height: 500px;
+  max-height: 520px;
   overflow-y: auto;
   overflow-x: auto;
   margin: 0;
@@ -469,6 +463,15 @@
   background: linear-gradient(135deg, #f97316, #ea580c);
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(234, 88, 12, 0.4);
+}
+
+.pos-inject-btn:disabled,
+.pos-inject-btn[disabled] {
+  background: #64748b !important;
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 /* Audit Table */

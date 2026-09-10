@@ -155,6 +155,19 @@ export const api = {
   createPasEvent: (eventData) => request('/pas-events', {
     method: 'POST',
     body: JSON.stringify(eventData),
+  }),
+
+  // POS Event Data Injector (MongoDB integration)
+  getPosEvents: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/pos-events${query ? `?${query}` : ''}`);
+  },
+  createPosEvent: (eventData) => request('/pos-events', {
+    method: 'POST',
+    body: JSON.stringify(eventData),
+  }),
+  deletePosEvents: (orderId = '') => request(`/pos-events${orderId ? `/${encodeURIComponent(orderId)}` : ''}`, {
+    method: 'DELETE',
   })
 };
 

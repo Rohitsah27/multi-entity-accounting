@@ -91,6 +91,79 @@ const POS_PRESETS = {
   }
 };
 
+// Helper to resolve the correct order ID and preset stage based on persisted events and user state
+export const resolvePosStateForScenario = (scenario, events = [], preferredOrderId = null) => {
+  const basePrefix = scenario === 'own_store' ? 'INV-AYU-OWN-' : 'INV-AYU-';
+
+  const checkInjected = (s, evtType, id) => {
+    if (!id) return false;
+    const cleanId = id.trim().toUpperCase();
+    const isOwn = s === 'own_store';
+    return events.some(evt => {
+      const evtIsOwn = evt.entity === 'ENT-OWN-01' || (evt.orderId && evt.orderId.toUpperCase().includes('OWN'));
+      const sMatches = isOwn ? evtIsOwn : !evtIsOwn;
+      return sMatches && evt.orderId?.trim().toUpperCase() === cleanId && evt.eventType === evtType;
+    });
+  };
+
+  const allStagesDone = (id) => ['CUSTOMER_INVOICE', 'CUSTOMER_PAYMENT_RECEIVED', 'FRANCHISE_ROYALTY_REMITTANCE'].every(t => checkInjected(scenario, t, id));
+
+  let targetOrderId = null;
+  if (preferredOrderId) {
+    const trimmed = preferredOrderId.trim().toUpperCase();
+    const isOwnFormat = trimmed.includes('OWN');
+    if (scenario === 'own_store' ? isOwnFormat : !isOwnFormat) {
+      targetOrderId = trimmed;
+    }
+  }
+
+  // If no valid preferred targetOrderId, look for an active in-progress order
+  if (!targetOrderId && Array.isArray(events) && events.length > 0) {
+    const inProgressEvt = events.find(evt => {
+      const evtIsOwn = evt.entity === 'ENT-OWN-01' || (evt.orderId && evt.orderId.toUpperCase().includes('OWN'));
+      if (scenario === 'own_store' ? !evtIsOwn : evtIsOwn) return false;
+      const id = evt.orderId?.trim().toUpperCase();
+      return id && !allStagesDone(id);
+    });
+
+    if (inProgressEvt) {
+      targetOrderId = inProgressEvt.orderId.trim().toUpperCase();
+    }
+  }
+
+  // If still no target, find the lowest clean unused order counter
+  if (!targetOrderId) {
+    let counter = 101;
+    while (counter < 999) {
+      const candidate = `${basePrefix}${counter}`;
+      if (!checkInjected(scenario, 'CUSTOMER_INVOICE', candidate)) {
+        targetOrderId = candidate;
+        break;
+      }
+      counter++;
+    }
+    if (!targetOrderId) targetOrderId = `${basePrefix}101`;
+  }
+
+  // Determine stage for targetOrderId
+  let presetKey = scenario === 'own_store' ? 'own_stage1_invoice' : 'stage1_invoice';
+  if (checkInjected(scenario, 'CUSTOMER_INVOICE', targetOrderId)) {
+    if (!checkInjected(scenario, 'CUSTOMER_PAYMENT_RECEIVED', targetOrderId)) {
+      presetKey = scenario === 'own_store' ? 'own_stage2_payment' : 'stage2_payment';
+    } else if (!checkInjected(scenario, 'FRANCHISE_ROYALTY_REMITTANCE', targetOrderId)) {
+      presetKey = scenario === 'own_store' ? 'own_stage3_remittance' : 'stage3_remittance';
+    } else {
+      // All 3 stages are completed! Keep on Stage 3 so user can view all 3 stages as Already Injected and celebration
+      presetKey = scenario === 'own_store' ? 'own_stage3_remittance' : 'stage3_remittance';
+    }
+  }
+
+  return {
+    orderId: targetOrderId,
+    presetKey: presetKey
+  };
+};
+
 // Default to empty array — no dummy/mock transactions exist after database reset or initial state
 const INITIAL_INJECTED_EVENTS = [];
 
@@ -112,23 +185,15 @@ export function PosOperationsPage() {
   // Active Tab: 'injector' | 'events' | 'catalog' | 'simulator'
   const [activeTab, setActiveTab] = useState('injector');
 
-  // Active preset — defaults to Stage 1: Share Invoice to Ayushi
-  const [selectedPreset, setSelectedPreset] = useState('stage1_invoice');
+  // Auto-detect role: Own Store vs Franchise Store
+  const initialIsOwn = (
+    currentUser?.entityId === 'ENT-OWN-01' ||
+    (currentUser?.businessType || activeEntity?.businessType || '').toLowerCase() === 'ownstore' ||
+    (currentUser?.role || '').toLowerCase().includes('ownstore') ||
+    (currentUser?.entityName || activeEntity?.name || '').toLowerCase().includes('own store')
+  );
 
-  // Active business operating scenario: 'franchise' | 'own_store'
-  const [selectedScenario, setSelectedScenario] = useState('franchise');
-
-  // Form Fields
-  const [eventType, setEventType] = useState(POS_PRESETS.stage1_invoice.eventType);
-  const [orderId, setOrderId] = useState(POS_PRESETS.stage1_invoice.orderId);
-  const [customerName, setCustomerName] = useState(POS_PRESETS.stage1_invoice.customerName);
-  const [pizzaItem, setPizzaItem] = useState(POS_PRESETS.stage1_invoice.pizzaItem);
-  const [saleAmount, setSaleAmount] = useState(POS_PRESETS.stage1_invoice.saleAmount);
-  const [formFranchisePct, setFormFranchisePct] = useState(POS_PRESETS.stage1_invoice.franchisePct);
-  const [paymentMethod, setPaymentMethod] = useState(POS_PRESETS.stage1_invoice.paymentMethod);
-  const [storeEntity, setStoreEntity] = useState('ENT-FRN-01');
-  const [hubEntity, setHubEntity] = useState('ENT-HUB-01');
-  const [notes, setNotes] = useState(POS_PRESETS.stage1_invoice.notes);
+  const initialScenario = initialIsOwn ? 'own_store' : 'franchise';
 
   // Injected events stream — empty if reset or no orders injected yet
   const [injectedEvents, setInjectedEvents] = useState(() => {
@@ -147,6 +212,48 @@ export function PosOperationsPage() {
     }
   });
 
+  // Calculate clean initial order ID and preset right away so page NEVER opens into "Already Injected" on First Inject
+  // AND retains in-progress orders (e.g. Stage 2 after Stage 1 was injected) upon page refresh!
+  const initialResolved = useMemo(() => {
+    let savedEvents = [];
+    try {
+      if (localStorage.getItem('v_data_reset') !== '1') {
+        const saved = localStorage.getItem('v_pos_injected_events');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) savedEvents = parsed;
+        }
+      }
+    } catch {}
+    let preferredId = null;
+    try {
+      preferredId = localStorage.getItem('v_pos_active_order_id');
+    } catch {}
+    return resolvePosStateForScenario(initialScenario, savedEvents, preferredId);
+  }, [initialScenario]);
+
+  const initialPresetKey = initialResolved.presetKey;
+  const initialPreset = POS_PRESETS[initialPresetKey] || POS_PRESETS.stage1_invoice;
+  const initialOrderId = initialResolved.orderId;
+
+  // Active preset
+  const [selectedPreset, setSelectedPreset] = useState(initialPresetKey);
+
+  // Active business operating scenario: 'franchise' | 'own_store'
+  const [selectedScenario, setSelectedScenario] = useState(initialScenario);
+
+  // Form Fields
+  const [eventType, setEventType] = useState(initialPreset.eventType);
+  const [orderId, setOrderId] = useState(initialOrderId);
+  const [customerName, setCustomerName] = useState(initialPreset.customerName);
+  const [pizzaItem, setPizzaItem] = useState(initialPreset.pizzaItem);
+  const [saleAmount, setSaleAmount] = useState(initialPreset.saleAmount);
+  const [formFranchisePct, setFormFranchisePct] = useState(initialPreset.franchisePct);
+  const [paymentMethod, setPaymentMethod] = useState(initialPreset.paymentMethod);
+  const [storeEntity, setStoreEntity] = useState(initialPreset.storeEntity || (initialIsOwn ? 'ENT-OWN-01' : 'ENT-FRN-01'));
+  const [hubEntity, setHubEntity] = useState('ENT-HUB-01');
+  const [notes, setNotes] = useState(initialPreset.notes);
+
   const [expandedEventId, setExpandedEventId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
@@ -158,13 +265,38 @@ export function PosOperationsPage() {
     } catch {}
   }, [injectedEvents]);
 
+  // Load persisted POS events from MongoDB on mount
+  useEffect(() => {
+    let isMounted = true;
+    api.getPosEvents()
+      .then((persisted) => {
+        if (!isMounted || !Array.isArray(persisted) || persisted.length === 0) return;
+        setInjectedEvents(prev => {
+          const seenIds = new Set(persisted.map(e => e.id || e.event_id || e._id));
+          const merged = [...persisted, ...prev.filter(e => !seenIds.has(e.id || e.event_id || e._id))];
+          try {
+            localStorage.setItem('v_pos_injected_events', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      })
+      .catch(err => console.warn('[MongoDB POS Event Fetch]:', err.message));
+
+    return () => { isMounted = false; };
+  }, []);
+
   // Listen for database and local data reset events — instantly empties the audit stream and KPIs
   useEffect(() => {
     const handleReset = () => {
       setInjectedEvents([]);
       try {
         localStorage.setItem('v_pos_injected_events', '[]');
+        localStorage.removeItem('v_pos_active_order_id');
       } catch {}
+      api.deletePosEvents().catch(() => {});
+      const initialKey = selectedScenario === 'own_store' ? 'own_stage1_invoice' : 'stage1_invoice';
+      const cleanId = selectedScenario === 'own_store' ? 'INV-AYU-OWN-101' : 'INV-AYU-101';
+      handleApplyPreset(initialKey, cleanId);
     };
 
     window.addEventListener('veridex:pos-events-reset', handleReset);
@@ -176,20 +308,117 @@ export function PosOperationsPage() {
       window.removeEventListener('veridex:data-reset', handleReset);
       window.removeEventListener('veridex:pas-events-reset', handleReset);
     };
-  }, []);
+  }, [selectedScenario]);
+
+  // Sync active order ID to localStorage so refreshing always stays on current order
+  useEffect(() => {
+    if (orderId) {
+      try {
+        localStorage.setItem('v_pos_active_order_id', orderId);
+      } catch {}
+    }
+  }, [orderId]);
 
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 3800);
   };
 
-  // Handle Preset Change
-  const handleApplyPreset = (presetKey) => {
+  // Get next available clean order number where Stage 1 has not been injected yet
+  const getNextAvailableOrderId = (scenario, events = injectedEvents) => {
+    const basePrefix = scenario === 'own_store' ? 'INV-AYU-OWN-' : 'INV-AYU-';
+    let counter = 101;
+    while (counter < 999) {
+      const candidate = `${basePrefix}${counter}`;
+      const isCandidateInjected = events.some(e =>
+        e.orderId?.trim().toUpperCase() === candidate.toUpperCase() &&
+        e.eventType === 'CUSTOMER_INVOICE'
+      );
+      if (!isCandidateInjected) {
+        return candidate;
+      }
+      counter++;
+    }
+    return `${basePrefix}${counter}`;
+  };
+
+  // Stage injection lockout — matches Insurance PAS policy administration system
+  // Prevents duplicate injection of the SAME stage for the SAME order.
+  // Never blocks a new order or a different order number.
+  const isEventInjected = (scenario, evtType, targetOrderId = orderId) => {
+    if (!targetOrderId) return false;
+    const cleanTargetId = targetOrderId.trim().toUpperCase();
+    const isOwn = scenario === 'own_store';
+    return injectedEvents.some(evt => {
+      const evtIsOwn = evt.entity === 'ENT-OWN-01' || (evt.orderId && evt.orderId.toUpperCase().includes('OWN'));
+      const scenarioMatches = isOwn ? evtIsOwn : !evtIsOwn;
+      const orderMatches = evt.orderId && evt.orderId.trim().toUpperCase() === cleanTargetId;
+      return scenarioMatches && orderMatches && evt.eventType === evtType;
+    });
+  };
+
+  const isPresetInjected = (presetKey, targetOrderId = orderId) => {
+    const p = POS_PRESETS[presetKey];
+    if (!p) return false;
+    return isEventInjected(p.scenario, p.eventType, targetOrderId);
+  };
+
+  const currentStageInjected = isEventInjected(selectedScenario, eventType, orderId);
+
+  // Check if current order has finished all 3 accounting stages
+  const isCurrentOrderCompleted = (
+    isEventInjected(selectedScenario, 'CUSTOMER_INVOICE', orderId) &&
+    isEventInjected(selectedScenario, 'CUSTOMER_PAYMENT_RECEIVED', orderId) &&
+    isEventInjected(selectedScenario, 'FRANCHISE_ROYALTY_REMITTANCE', orderId)
+  );
+
+  // Start fresh order cycle (e.g. INV-AYU-102 or INV-AYU-OWN-102)
+  const handleStartNewOrder = (scenario = selectedScenario) => {
+    const nextId = getNextAvailableOrderId(scenario);
+    setOrderId(nextId);
+    try {
+      localStorage.setItem('v_pos_active_order_id', nextId);
+    } catch {}
+    const initialKey = scenario === 'own_store' ? 'own_stage1_invoice' : 'stage1_invoice';
+    handleApplyPreset(initialKey, nextId);
+    showToast(`Started fresh retail order: ${nextId}. First Inject (Stage 1) ready!`, 'info');
+  };
+
+  // Clear previous injection lock for current order so it can be re-tested
+  const handleReinjectCurrentOrder = () => {
+    const target = orderId;
+    if (!target) return;
+    setInjectedEvents(prev => prev.filter(e => e.orderId?.trim().toUpperCase() !== target.trim().toUpperCase()));
+    api.deletePosEvents(target).catch(err => console.warn('[MongoDB POS Event Delete]:', err.message));
+    try {
+      localStorage.setItem('v_pos_active_order_id', target);
+    } catch {}
+    const initialKey = selectedScenario === 'own_store' ? 'own_stage1_invoice' : 'stage1_invoice';
+    handleApplyPreset(initialKey, target);
+    showToast(`Cleared previous injection records for ${target}. Ready to inject again!`, 'info');
+  };
+
+  // Handle Preset Change — preserves orderId unless explicitly overridden or selecting Stage 1 for an already-injected order
+  const handleApplyPreset = (presetKey, customOrderId = null) => {
     setSelectedPreset(presetKey);
     const p = POS_PRESETS[presetKey];
     if (!p) return;
     setEventType(p.eventType);
-    setOrderId(p.orderId);
+
+    let activeOrderId = customOrderId !== null ? customOrderId : orderId;
+
+    // If selecting Stage 1 (First Inject) manually and the active order already has Stage 1 injected:
+    // Automatically switch to the next available clean order ID so "First Inject" is ready immediately!
+    if (customOrderId === null && p.eventType === 'CUSTOMER_INVOICE') {
+      if (!activeOrderId || isEventInjected(p.scenario, 'CUSTOMER_INVOICE', activeOrderId)) {
+        activeOrderId = getNextAvailableOrderId(p.scenario);
+      }
+    }
+
+    setOrderId(activeOrderId);
+    try {
+      if (activeOrderId) localStorage.setItem('v_pos_active_order_id', activeOrderId);
+    } catch {}
     setCustomerName(p.customerName);
     setPizzaItem(p.pizzaItem);
     setSaleAmount(p.saleAmount);
@@ -205,18 +434,85 @@ export function PosOperationsPage() {
   };
 
   // Quick switch between Scenario 1 (Franchise 70/30) and Scenario 2 (100% Own Store)
-  const handleSelectScenario = (scenario) => {
+  const handleSelectScenario = (scenario, showFeedbackToast = true) => {
     setSelectedScenario(scenario);
+    let preferredId = null;
+    try {
+      const saved = localStorage.getItem('v_pos_active_order_id');
+      if (saved) {
+        const isOwnId = saved.toUpperCase().includes('OWN');
+        if (scenario === 'own_store' ? isOwnId : !isOwnId) {
+          preferredId = saved;
+        }
+      }
+    } catch {}
+
+    const resolved = resolvePosStateForScenario(scenario, injectedEvents, preferredId);
     if (scenario === 'own_store') {
       setStoreEntity('ENT-OWN-01');
-      handleApplyPreset('own_stage1_invoice');
-      showToast('Switched to Scenario 2: 100% Own Store Model (Main Hub → Own Store → Customer)', 'info');
+      setFormFranchisePct(0);
+      setOrderId(resolved.orderId);
+      handleApplyPreset(resolved.presetKey, resolved.orderId);
+      if (showFeedbackToast) {
+        showToast('Switched to Scenario 2: 100% Own Store Model (Main Hub → Own Store → Customer)', 'info');
+      }
     } else {
       setStoreEntity('ENT-FRN-01');
-      handleApplyPreset('stage1_invoice');
-      showToast('Switched to Scenario 1: Franchise Store Model (70% Store / 30% Hub)', 'info');
+      setFormFranchisePct(70);
+      setOrderId(resolved.orderId);
+      handleApplyPreset(resolved.presetKey, resolved.orderId);
+      if (showFeedbackToast) {
+        showToast('Switched to Scenario 1: Franchise Store Model (70% Store / 30% Hub)', 'info');
+      }
     }
   };
+
+  // Role-based auto-selection of Operating Scenario:
+  // If active workspace/role is Own Store -> auto-select Scenario 2 (100% Own Store)
+  // If active workspace/role is Franchise Store -> auto-select Scenario 1 (Franchise Store 70/30)
+  useEffect(() => {
+    const isOwn = (
+      currentUser?.entityId === 'ENT-OWN-01' ||
+      (currentUser?.businessType || activeEntity?.businessType || '').toLowerCase() === 'ownstore' ||
+      (currentUser?.role || '').toLowerCase().includes('ownstore') ||
+      (currentUser?.entityName || activeEntity?.name || '').toLowerCase().includes('own store')
+    );
+
+    const isFranchise = (
+      currentUser?.entityId === 'ENT-FRN-01' ||
+      (currentUser?.businessType || activeEntity?.businessType || '').toLowerCase() === 'franchise' ||
+      (currentUser?.role || '').toLowerCase().includes('franchise') ||
+      (currentUser?.entityName || activeEntity?.name || '').toLowerCase().includes('franchise')
+    );
+
+    if (isOwn) {
+      if (selectedScenario !== 'own_store') {
+        handleSelectScenario('own_store', true);
+      }
+    } else if (isFranchise) {
+      if (selectedScenario !== 'franchise') {
+        handleSelectScenario('franchise', true);
+      }
+    }
+  }, [
+    currentUser?.entityId,
+    currentUser?.businessType,
+    currentUser?.role,
+    currentUser?.entityName,
+    activeEntity?.id,
+    activeEntity?.businessType,
+    activeEntity?.name
+  ]);
+
+  // If injected events change (e.g. from MongoDB fetch on refresh), align preset if current stage is already injected
+  useEffect(() => {
+    if (!orderId || !injectedEvents || injectedEvents.length === 0) return;
+    const isCurrentInjected = isEventInjected(selectedScenario, eventType, orderId);
+    if (isCurrentInjected) {
+      const resolved = resolvePosStateForScenario(selectedScenario, injectedEvents, orderId);
+      handleApplyPreset(resolved.presetKey, resolved.orderId);
+    }
+  }, [injectedEvents]);
 
   const handleStoreEntityChange = (entity) => {
     setStoreEntity(entity);
@@ -233,6 +529,23 @@ export function PosOperationsPage() {
 
   const handleEventTypeChange = (newType) => {
     setEventType(newType);
+    if (selectedScenario === 'own_store') {
+      if (newType === 'CUSTOMER_INVOICE') setSelectedPreset('own_stage1_invoice');
+      else if (newType === 'CUSTOMER_PAYMENT_RECEIVED') setSelectedPreset('own_stage2_payment');
+      else if (newType === 'FRANCHISE_ROYALTY_REMITTANCE') setSelectedPreset('own_stage3_remittance');
+    } else {
+      if (newType === 'CUSTOMER_INVOICE') setSelectedPreset('stage1_invoice');
+      else if (newType === 'CUSTOMER_PAYMENT_RECEIVED') setSelectedPreset('stage2_payment');
+      else if (newType === 'FRANCHISE_ROYALTY_REMITTANCE') setSelectedPreset('stage3_remittance');
+    }
+
+    // If switching to First Inject (Stage 1) and current order already has Stage 1 injected,
+    // automatically assign the next clean order ID so First Inject is immediately ready!
+    if (newType === 'CUSTOMER_INVOICE' && (!orderId || isEventInjected(selectedScenario, 'CUSTOMER_INVOICE', orderId))) {
+      const freshId = getNextAvailableOrderId(selectedScenario);
+      setOrderId(freshId);
+    }
+
     if (newType === 'FRANCHISE_ROYALTY_REMITTANCE') {
       if (storeEntity === 'ENT-OWN-01') {
         setSaleAmount(100);
@@ -315,6 +628,11 @@ export function PosOperationsPage() {
   // Execute Event Injection into Double-Entry Accounting Engine
   const handleInjectEvent = () => {
     try {
+      if (currentStageInjected) {
+        showToast('This event stage has already been injected — pick a different stage.', 'error');
+        return;
+      }
+
       const today = new Date().toISOString().slice(0, 10);
       const isOwn = storeEntity === 'ENT-OWN-01';
       const storeName = isOwn ? "Domino's Own Store #1" : "Domino's Franchise Store #12";
@@ -642,6 +960,30 @@ export function PosOperationsPage() {
         localStorage.removeItem('v_data_reset');
       } catch {}
 
+      // Persist directly to MongoDB database
+      api.createPosEvent(newEvent).catch(err => console.warn('[MongoDB POS Event Sync]:', err.message));
+
+      // Synchronously advance to the next uninjected stage, or retain completed order on Stage 3
+      if (selectedScenario === 'own_store') {
+        if (eventType === 'CUSTOMER_INVOICE') {
+          handleApplyPreset('own_stage2_payment', orderId);
+        } else if (eventType === 'CUSTOMER_PAYMENT_RECEIVED') {
+          handleApplyPreset('own_stage3_remittance', orderId);
+        } else if (eventType === 'FRANCHISE_ROYALTY_REMITTANCE') {
+          // All 3 stages complete for this order! Retain orderId and Stage 3 so user can view all 3 completed stages
+          handleApplyPreset('own_stage3_remittance', orderId);
+        }
+      } else {
+        if (eventType === 'CUSTOMER_INVOICE') {
+          handleApplyPreset('stage2_payment', orderId);
+        } else if (eventType === 'CUSTOMER_PAYMENT_RECEIVED') {
+          handleApplyPreset('stage3_remittance', orderId);
+        } else if (eventType === 'FRANCHISE_ROYALTY_REMITTANCE') {
+          // All 3 stages complete for this order! Retain orderId and Stage 3 so user can view all 3 completed stages
+          handleApplyPreset('stage3_remittance', orderId);
+        }
+      }
+
       if (eventType === 'CUSTOMER_INVOICE') {
         if (isOwn) {
           showToast(`JE 1 & JE 2 posted: Own Store invoices ${customerName} $${numericAmount.toFixed(0)} (A/R Dr $${numericAmount.toFixed(0)}, Due to Main Hub Cr $${numericAmount.toFixed(0)}). Main Hub records A/R – Own Store Dr $${numericAmount.toFixed(0)}, Pizza Sales Revenue Cr $${numericAmount.toFixed(0)}.`);
@@ -800,23 +1142,38 @@ export function PosOperationsPage() {
 
           {/* Preset Selector Banner */}
           <div className="pos-preset-bar">
-            <div className="pos-preset-left">
+            <div className="pos-preset-left" style={{ flex: 1 }}>
               <span className="pos-preset-label">⚡ Load POS Event Preset:</span>
               <select
                 className="pos-preset-select"
                 value={selectedPreset}
                 onChange={(e) => handleApplyPreset(e.target.value)}
               >
-                <optgroup label="🏢 Scenario 2: 100% Own Store (No Franchise Involved)">
-                  <option value="own_stage1_invoice">{POS_PRESETS.own_stage1_invoice.label}</option>
-                  <option value="own_stage2_payment">{POS_PRESETS.own_stage2_payment.label}</option>
-                  <option value="own_stage3_remittance">{POS_PRESETS.own_stage3_remittance.label}</option>
-                </optgroup>
-                <optgroup label="🏪 Scenario 1: Franchise Model (70/30 Split)">
-                  <option value="stage1_invoice">{POS_PRESETS.stage1_invoice.label}</option>
-                  <option value="stage2_payment">{POS_PRESETS.stage2_payment.label}</option>
-                  <option value="stage3_remittance">{POS_PRESETS.stage3_remittance.label}</option>
-                </optgroup>
+                {selectedScenario === 'own_store' ? (
+                  <optgroup label="🏢 Scenario 2: 100% Own Store (No Franchise Involved)">
+                    <option value="own_stage1_invoice" disabled={isPresetInjected('own_stage1_invoice')}>
+                      {isPresetInjected('own_stage1_invoice') ? `✓ ${POS_PRESETS.own_stage1_invoice.label} — Already Injected` : POS_PRESETS.own_stage1_invoice.label}
+                    </option>
+                    <option value="own_stage2_payment" disabled={isPresetInjected('own_stage2_payment')}>
+                      {isPresetInjected('own_stage2_payment') ? `✓ ${POS_PRESETS.own_stage2_payment.label} — Already Injected` : POS_PRESETS.own_stage2_payment.label}
+                    </option>
+                    <option value="own_stage3_remittance" disabled={isPresetInjected('own_stage3_remittance')}>
+                      {isPresetInjected('own_stage3_remittance') ? `✓ ${POS_PRESETS.own_stage3_remittance.label} — Already Injected` : POS_PRESETS.own_stage3_remittance.label}
+                    </option>
+                  </optgroup>
+                ) : (
+                  <optgroup label="🏪 Scenario 1: Franchise Model (70/30 Split)">
+                    <option value="stage1_invoice" disabled={isPresetInjected('stage1_invoice')}>
+                      {isPresetInjected('stage1_invoice') ? `✓ ${POS_PRESETS.stage1_invoice.label} — Already Injected` : POS_PRESETS.stage1_invoice.label}
+                    </option>
+                    <option value="stage2_payment" disabled={isPresetInjected('stage2_payment')}>
+                      {isPresetInjected('stage2_payment') ? `✓ ${POS_PRESETS.stage2_payment.label} — Already Injected` : POS_PRESETS.stage2_payment.label}
+                    </option>
+                    <option value="stage3_remittance" disabled={isPresetInjected('stage3_remittance')}>
+                      {isPresetInjected('stage3_remittance') ? `✓ ${POS_PRESETS.stage3_remittance.label} — Already Injected` : POS_PRESETS.stage3_remittance.label}
+                    </option>
+                  </optgroup>
+                )}
               </select>
             </div>
             <button
@@ -848,22 +1205,52 @@ export function PosOperationsPage() {
                   >
                     {isOwnStore ? (
                       <>
-                        <option value="CUSTOMER_INVOICE">First Inject: JE 1 &amp; JE 2 (Own Store invoices Ayushi $100)</option>
-                        <option value="CUSTOMER_PAYMENT_RECEIVED">Second Inject: JE 3 (Ayushi pays Own Store $100)</option>
-                        <option value="FRANCHISE_ROYALTY_REMITTANCE">Third Inject: JE 4 &amp; JE 5 (Own Store pays Main Hub $100)</option>
+                        <option value="CUSTOMER_INVOICE" disabled={isEventInjected('own_store', 'CUSTOMER_INVOICE')}>
+                          {isEventInjected('own_store', 'CUSTOMER_INVOICE') ? '✓ ' : ''}First Inject: JE 1 &amp; JE 2 (Own Store invoices Ayushi $100){isEventInjected('own_store', 'CUSTOMER_INVOICE') ? ' — Already Injected' : ''}
+                        </option>
+                        <option value="CUSTOMER_PAYMENT_RECEIVED" disabled={isEventInjected('own_store', 'CUSTOMER_PAYMENT_RECEIVED')}>
+                          {isEventInjected('own_store', 'CUSTOMER_PAYMENT_RECEIVED') ? '✓ ' : ''}Second Inject: JE 3 (Ayushi pays Own Store $100){isEventInjected('own_store', 'CUSTOMER_PAYMENT_RECEIVED') ? ' — Already Injected' : ''}
+                        </option>
+                        <option value="FRANCHISE_ROYALTY_REMITTANCE" disabled={isEventInjected('own_store', 'FRANCHISE_ROYALTY_REMITTANCE')}>
+                          {isEventInjected('own_store', 'FRANCHISE_ROYALTY_REMITTANCE') ? '✓ ' : ''}Third Inject: JE 4 &amp; JE 5 (Own Store pays Main Hub $100){isEventInjected('own_store', 'FRANCHISE_ROYALTY_REMITTANCE') ? ' — Already Injected' : ''}
+                        </option>
                       </>
                     ) : (
                       <>
-                        <option value="CUSTOMER_INVOICE">First Inject: JE 1 &amp; JE 2 (Franchise invoices Ayushi $100)</option>
-                        <option value="CUSTOMER_PAYMENT_RECEIVED">Second Inject: JE 3 (Ayushi pays Franchise $100)</option>
-                        <option value="FRANCHISE_ROYALTY_REMITTANCE">Third Inject: JE 4 &amp; JE 5 (Franchise pays Main Hub $30)</option>
+                        <option value="CUSTOMER_INVOICE" disabled={isEventInjected('franchise', 'CUSTOMER_INVOICE')}>
+                          {isEventInjected('franchise', 'CUSTOMER_INVOICE') ? '✓ ' : ''}First Inject: JE 1 &amp; JE 2 (Franchise invoices Ayushi $100){isEventInjected('franchise', 'CUSTOMER_INVOICE') ? ' — Already Injected' : ''}
+                        </option>
+                        <option value="CUSTOMER_PAYMENT_RECEIVED" disabled={isEventInjected('franchise', 'CUSTOMER_PAYMENT_RECEIVED')}>
+                          {isEventInjected('franchise', 'CUSTOMER_PAYMENT_RECEIVED') ? '✓ ' : ''}Second Inject: JE 3 (Ayushi pays Franchise $100){isEventInjected('franchise', 'CUSTOMER_PAYMENT_RECEIVED') ? ' — Already Injected' : ''}
+                        </option>
+                        <option value="FRANCHISE_ROYALTY_REMITTANCE" disabled={isEventInjected('franchise', 'FRANCHISE_ROYALTY_REMITTANCE')}>
+                          {isEventInjected('franchise', 'FRANCHISE_ROYALTY_REMITTANCE') ? '✓ ' : ''}Third Inject: JE 4 &amp; JE 5 (Franchise pays Main Hub $30){isEventInjected('franchise', 'FRANCHISE_ROYALTY_REMITTANCE') ? ' — Already Injected' : ''}
+                        </option>
                       </>
                     )}
                   </select>
                 </div>
 
                 <div className="pos-form-group">
-                  <label className="pos-label">Order / Transaction ID</label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label className="pos-label" style={{ marginBottom: 0 }}>Order / Transaction ID</label>
+                    <button
+                      type="button"
+                      onClick={() => handleStartNewOrder()}
+                      style={{
+                        background: '#f1f5f9',
+                        border: '1px solid #cbd5e1',
+                        color: '#0284c7',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + New Order
+                    </button>
+                  </div>
                   <input
                     type="text"
                     className="pos-input"
@@ -985,18 +1372,29 @@ export function PosOperationsPage() {
                 </div>
               </div>
 
-              {/* Action Button (Docked to bottom for equal card heights) */}
-              <div style={{ marginTop: 'auto', paddingTop: '14px' }}>
+              {/* Action Button */}
+              <div style={{ marginTop: '4px' }}>
                 <button
                   type="button"
                   className="pos-inject-btn"
+                  disabled={currentStageInjected}
                   onClick={handleInjectEvent}
+                  style={{
+                    opacity: currentStageInjected ? 0.6 : 1,
+                    cursor: currentStageInjected ? 'not-allowed' : 'pointer',
+                    background: currentStageInjected ? '#64748b' : undefined,
+                    boxShadow: currentStageInjected ? 'none' : undefined
+                  }}
                 >
-                  <span>⚡</span> Inject POS Event into Rules Engine
+                  <span>{currentStageInjected ? '✓' : '⚡'}</span>{' '}
+                  {currentStageInjected ? 'Already Injected' : 'Inject POS Event into Rules Engine'}
                 </button>
 
-                <div style={{ marginTop: '8px', fontSize: '11.5px', color: '#94a3b8', lineHeight: 1.4, textAlign: 'center' }}>
-                  Injecting triggers balanced debit/credit posting across Store &amp; Hub general ledgers with instant AP/AR synchronization.
+                <div style={{ marginTop: '8px', fontSize: '11.5px', color: currentStageInjected ? '#ef4444' : '#94a3b8', lineHeight: 1.4, textAlign: 'center', fontWeight: currentStageInjected ? 600 : 400 }}>
+                  {currentStageInjected
+                    ? 'This event stage has already been injected and posted to the General Ledger.'
+                    : 'Injecting triggers balanced debit/credit posting across Store & Hub general ledgers with instant AP/AR synchronization.'
+                  }
                 </div>
               </div>
             </div>
@@ -1342,35 +1740,63 @@ export function PosOperationsPage() {
                 <button
                   type="button"
                   className="btn-primary"
-                  style={{ padding: '10px 22px', fontSize: '13px', background: '#0284c7', borderColor: '#38bdf8' }}
+                  disabled={isPresetInjected('own_stage1_invoice')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    background: isPresetInjected('own_stage1_invoice') ? '#64748b' : '#0284c7',
+                    borderColor: isPresetInjected('own_stage1_invoice') ? '#64748b' : '#38bdf8',
+                    opacity: isPresetInjected('own_stage1_invoice') ? 0.6 : 1,
+                    cursor: isPresetInjected('own_stage1_invoice') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('own_stage1_invoice');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('own_stage1_invoice')) {
+                      handleApplyPreset('own_stage1_invoice');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  1. First Inject: Own Store Invoices Ayushi (JE 1 &amp; JE 2)
+                  {isPresetInjected('own_stage1_invoice') ? '✓ 1. Own Store Invoices Ayushi (Already Injected)' : '1. First Inject: Own Store Invoices Ayushi (JE 1 & JE 2)'}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ padding: '10px 22px', fontSize: '13px' }}
+                  disabled={isPresetInjected('own_stage2_payment')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    opacity: isPresetInjected('own_stage2_payment') ? 0.6 : 1,
+                    cursor: isPresetInjected('own_stage2_payment') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('own_stage2_payment');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('own_stage2_payment')) {
+                      handleApplyPreset('own_stage2_payment');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  2. Second Inject: Ayushi Pays Own Store (JE 3)
+                  {isPresetInjected('own_stage2_payment') ? '✓ 2. Ayushi Pays Own Store (Already Injected)' : '2. Second Inject: Ayushi Pays Own Store (JE 3)'}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ padding: '10px 22px', fontSize: '13px', borderColor: '#38bdf8', color: '#38bdf8' }}
+                  disabled={isPresetInjected('own_stage3_remittance')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    borderColor: isPresetInjected('own_stage3_remittance') ? '#64748b' : '#38bdf8',
+                    color: isPresetInjected('own_stage3_remittance') ? '#64748b' : '#38bdf8',
+                    opacity: isPresetInjected('own_stage3_remittance') ? 0.6 : 1,
+                    cursor: isPresetInjected('own_stage3_remittance') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('own_stage3_remittance');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('own_stage3_remittance')) {
+                      handleApplyPreset('own_stage3_remittance');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  3. Third Inject: Own Store Pays Main Hub (JE 4 &amp; JE 5)
+                  {isPresetInjected('own_stage3_remittance') ? '✓ 3. Own Store Pays Main Hub (Already Injected)' : '3. Third Inject: Own Store Pays Main Hub (JE 4 & JE 5)'}
                 </button>
               </>
             ) : (
@@ -1378,35 +1804,63 @@ export function PosOperationsPage() {
                 <button
                   type="button"
                   className="btn-primary"
-                  style={{ padding: '10px 22px', fontSize: '13px' }}
+                  disabled={isPresetInjected('stage1_invoice')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    background: isPresetInjected('stage1_invoice') ? '#64748b' : undefined,
+                    borderColor: isPresetInjected('stage1_invoice') ? '#64748b' : undefined,
+                    opacity: isPresetInjected('stage1_invoice') ? 0.6 : 1,
+                    cursor: isPresetInjected('stage1_invoice') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('stage1_invoice');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('stage1_invoice')) {
+                      handleApplyPreset('stage1_invoice');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  1. First Inject: Franchise Invoices Ayushi (JE 1 &amp; JE 2)
+                  {isPresetInjected('stage1_invoice') ? '✓ 1. Franchise Invoices Ayushi (Already Injected)' : '1. First Inject: Franchise Invoices Ayushi (JE 1 & JE 2)'}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ padding: '10px 22px', fontSize: '13px' }}
+                  disabled={isPresetInjected('stage2_payment')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    opacity: isPresetInjected('stage2_payment') ? 0.6 : 1,
+                    cursor: isPresetInjected('stage2_payment') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('stage2_payment');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('stage2_payment')) {
+                      handleApplyPreset('stage2_payment');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  2. Second Inject: Ayushi Pays Franchise (JE 3)
+                  {isPresetInjected('stage2_payment') ? '✓ 2. Ayushi Pays Franchise (Already Injected)' : '2. Second Inject: Ayushi Pays Franchise (JE 3)'}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  style={{ padding: '10px 22px', fontSize: '13px', borderColor: '#38bdf8', color: '#38bdf8' }}
+                  disabled={isPresetInjected('stage3_remittance')}
+                  style={{
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    borderColor: isPresetInjected('stage3_remittance') ? '#64748b' : '#38bdf8',
+                    color: isPresetInjected('stage3_remittance') ? '#64748b' : '#38bdf8',
+                    opacity: isPresetInjected('stage3_remittance') ? 0.6 : 1,
+                    cursor: isPresetInjected('stage3_remittance') ? 'not-allowed' : 'pointer'
+                  }}
                   onClick={() => {
-                    handleApplyPreset('stage3_remittance');
-                    setActiveTab('injector');
+                    if (!isPresetInjected('stage3_remittance')) {
+                      handleApplyPreset('stage3_remittance');
+                      setActiveTab('injector');
+                    }
                   }}
                 >
-                  3. Third Inject: Franchise Pays Main Hub (JE 4 &amp; JE 5)
+                  {isPresetInjected('stage3_remittance') ? '✓ 3. Franchise Pays Main Hub (Already Injected)' : '3. Third Inject: Franchise Pays Main Hub (JE 4 & JE 5)'}
                 </button>
               </>
             )}
