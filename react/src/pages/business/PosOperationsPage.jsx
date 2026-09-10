@@ -651,7 +651,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1100', accountName: `A/R – ${customerName}`, debit: numericAmount, credit: 0, description: `A/R – ${customerName}` },
               { accountCode: '2050', accountName: 'Due to Main Hub (Intercompany Payable)', debit: 0, credit: numericAmount, description: 'Due to Main Hub (Intercompany Payable)' }
@@ -666,7 +666,7 @@ export function PosOperationsPage() {
             entity: hubEntity,
             entityName: hubName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1180', accountName: 'A/R – Own Store', debit: numericAmount, credit: 0, description: 'A/R – Own Store' },
               { accountCode: '4600', accountName: 'Pizza Sales Revenue – Main Hub', debit: 0, credit: numericAmount, description: 'Pizza Sales Revenue – Main Hub' }
@@ -714,7 +714,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1100', accountName: `A/R – ${customerName}`, debit: numericAmount, credit: 0, description: `A/R – ${customerName}` },
               { accountCode: '4500', accountName: 'Franchise Pizza Revenue', debit: 0, credit: franchiseShare, description: 'Franchise Pizza Revenue' },
@@ -730,7 +730,7 @@ export function PosOperationsPage() {
             entity: hubEntity,
             entityName: hubName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1180', accountName: 'A/R – Franchise', debit: corporateShare, credit: 0, description: 'A/R – Franchise' },
               { accountCode: '4600', accountName: 'Main Hub Pizza Revenue', debit: 0, credit: corporateShare, description: 'Main Hub Pizza Revenue' }
@@ -780,7 +780,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1001', accountName: 'Cash / Bank – Own Store', debit: numericAmount, credit: 0, description: `Cash collected from ${customerName} via ${paymentMethod}` },
               { accountCode: '1100', accountName: `A/R – ${customerName}`, debit: 0, credit: numericAmount, description: `Clear A/R – ${customerName}` }
@@ -795,7 +795,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1001', accountName: 'Cash / Bank – Franchise', debit: numericAmount, credit: 0, description: `Cash collected from ${customerName} via ${paymentMethod}` },
               { accountCode: '1100', accountName: `A/R – ${customerName}`, debit: 0, credit: numericAmount, description: `Clear A/R – ${customerName}` }
@@ -830,7 +830,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '2050', accountName: 'Payable to Main Hub', debit: numericAmount, credit: 0, description: 'Payable to Main Hub' },
               { accountCode: '1001', accountName: 'Cash / Bank – Own Store', debit: 0, credit: numericAmount, description: 'Cash / Bank – Own Store' }
@@ -845,7 +845,7 @@ export function PosOperationsPage() {
             entity: hubEntity,
             entityName: hubName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1001', accountName: 'Cash / Bank – Main Hub', debit: numericAmount, credit: 0, description: 'Cash / Bank – Main Hub' },
               { accountCode: '1180', accountName: 'A/R – Own Store', debit: 0, credit: numericAmount, description: 'A/R – Own Store' }
@@ -881,7 +881,7 @@ export function PosOperationsPage() {
             entity: storeEntity,
             entityName: storeName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '2050', accountName: 'Payable to Main Hub', debit: franchiseRemittanceAmount, credit: 0, description: `JE 4 — Franchise pays Main Hub for ${orderId}` },
               { accountCode: '1001', accountName: 'Cash / Bank – Franchise', debit: 0, credit: franchiseRemittanceAmount, description: `JE 4 — Franchise pays Main Hub for ${orderId}` }
@@ -896,7 +896,7 @@ export function PosOperationsPage() {
             entity: hubEntity,
             entityName: hubName,
             accountingLevel: 'pizza',
-            status: 'Posted',
+            status: 'Draft',
             lines: [
               { accountCode: '1001', accountName: 'Cash / Bank – Main Hub', debit: franchiseRemittanceAmount, credit: 0, description: 'Cash / Bank – Main Hub' },
               { accountCode: '1180', accountName: 'A/R – Franchise', debit: 0, credit: franchiseRemittanceAmount, description: 'A/R – Franchise' }
@@ -986,25 +986,25 @@ export function PosOperationsPage() {
 
       if (eventType === 'CUSTOMER_INVOICE') {
         if (isOwn) {
-          showToast(`JE 1 & JE 2 posted: Own Store invoices ${customerName} $${numericAmount.toFixed(0)} (A/R Dr $${numericAmount.toFixed(0)}, Due to Main Hub Cr $${numericAmount.toFixed(0)}). Main Hub records A/R – Own Store Dr $${numericAmount.toFixed(0)}, Pizza Sales Revenue Cr $${numericAmount.toFixed(0)}.`);
+          showToast(`JE 1 & JE 2 created as Draft: Own Store invoices ${customerName} $${numericAmount.toFixed(0)}. Ready to post manually in Journal Entry Workspace.`);
         } else {
-          showToast(`JE 1 & JE 2 posted: Invoiced ${customerName} $${numericAmount.toFixed(0)} (Store Revenue $${franchiseShare.toFixed(0)}, Payable to Hub $${corporateShare.toFixed(0)}). Main Hub recorded $${corporateShare.toFixed(0)} A/R.`);
+          showToast(`JE 1 & JE 2 created as Draft: Invoiced ${customerName} $${numericAmount.toFixed(0)}. Ready to post manually in Journal Entry Workspace.`);
         }
       } else if (eventType === 'CUSTOMER_PAYMENT_RECEIVED' || eventType === 'ORDER_PLACED_POS') {
         if (isOwn) {
-          showToast(`JE 3 posted: ${customerName} pays Own Store $${numericAmount.toFixed(0)}! Cash / Bank – Own Store Dr $${numericAmount.toFixed(0)}, A/R – ${customerName} Cr $${numericAmount.toFixed(0)}.`);
+          showToast(`JE 3 created as Draft: ${customerName} pays Own Store $${numericAmount.toFixed(0)}. Ready to post manually in Journal Entry Workspace.`);
         } else {
-          showToast(`JE 3 posted: ${customerName} pays Franchise $${numericAmount.toFixed(0)}! Cash / Bank – Franchise Dr $${numericAmount.toFixed(0)}, A/R – ${customerName} Cr $${numericAmount.toFixed(0)}.`);
+          showToast(`JE 3 created as Draft: ${customerName} pays Franchise $${numericAmount.toFixed(0)}. Ready to post manually in Journal Entry Workspace.`);
         }
       } else if (eventType === 'FRANCHISE_ROYALTY_REMITTANCE') {
         if (isOwn) {
-          showToast(`JE 4 & JE 5 posted: Own Store pays Main Hub $${numericAmount.toFixed(0)} (JE 4: Dr Payable $${numericAmount.toFixed(0)}, Cr Cash $${numericAmount.toFixed(0)}). Main Hub receives $${numericAmount.toFixed(0)} cash (JE 5: Dr Cash $${numericAmount.toFixed(0)}, Cr A/R – Own Store $${numericAmount.toFixed(0)})!`);
+          showToast(`JE 4 & JE 5 created as Draft: Own Store pays Main Hub $${numericAmount.toFixed(0)}. Ready to post manually in Journal Entry Workspace.`);
         } else {
           const remAmt = (numericAmount === 30 || numericAmount !== 100) ? numericAmount : (corporateShare > 0 ? corporateShare : 30);
-          showToast(`JE 4 & JE 5 posted: Franchise remitted $${remAmt.toFixed(0)} to Main Hub (JE 4: Dr Payable $${remAmt.toFixed(0)}, Cr Cash $${remAmt.toFixed(0)}). Main Hub received $${remAmt.toFixed(0)} cash!`);
+          showToast(`JE 4 & JE 5 created as Draft: Franchise remitted $${remAmt.toFixed(0)} to Main Hub. Ready to post manually in Journal Entry Workspace.`);
         }
       } else {
-        showToast(`Event [${eventType}] successfully injected!`);
+        showToast(`Event [${eventType}] successfully injected as Draft!`);
       }
     } catch (err) {
       showToast(err.message, 'error');
@@ -1392,8 +1392,8 @@ export function PosOperationsPage() {
 
                 <div style={{ marginTop: '8px', fontSize: '11.5px', color: currentStageInjected ? '#ef4444' : '#94a3b8', lineHeight: 1.4, textAlign: 'center', fontWeight: currentStageInjected ? 600 : 400 }}>
                   {currentStageInjected
-                    ? 'This event stage has already been injected and posted to the General Ledger.'
-                    : 'Injecting triggers balanced debit/credit posting across Store & Hub general ledgers with instant AP/AR synchronization.'
+                    ? 'This event stage has already been injected and staged in the General Ledger.'
+                    : 'Injecting creates draft debit/credit entries staged for review with manual posting to the General Ledger.'
                   }
                 </div>
               </div>

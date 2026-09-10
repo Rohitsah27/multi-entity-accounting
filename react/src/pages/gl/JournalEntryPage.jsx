@@ -364,14 +364,24 @@ export function JournalEntryPage() {
                       </td>
                       <td>
                         {isDraft ? (
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handlePost(je.id)}
-                            style={{ padding: '2px 14px', fontSize: '11.5px', fontWeight: 600 }}
-                          >
-                            Post
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => handlePost(je.id)}
+                              style={{ padding: '2px 12px', fontSize: '11.5px', fontWeight: 600 }}
+                            >
+                              Post
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setSelectedEntry(je)}
+                              style={{ padding: '2px 8px', fontSize: '11.5px' }}
+                            >
+                              View
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -725,11 +735,16 @@ export function JournalEntryPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--color-border)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
-                  Journal Entry: {selectedEntry.number || selectedEntry.id}
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                    Journal Entry: {selectedEntry.number || selectedEntry.id}
+                  </h3>
+                  <span className={`badge ${(selectedEntry.status || '').toLowerCase() === 'draft' ? 'badge-gray' : 'badge-green'}`}>
+                    {(selectedEntry.status || 'posted').toUpperCase()}
+                  </span>
+                </div>
                 <div style={{ fontSize: '12px', color: 'var(--color-muted)', marginTop: '3px' }}>
                   {selectedEntry.description} &middot; Date: {formatDateUK(selectedEntry.date)}
                 </div>
@@ -792,7 +807,20 @@ export function JournalEntryPage() {
               </table>
             </div>
 
-            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              {(selectedEntry.status || '').toLowerCase() === 'draft' && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    handlePost(selectedEntry.id);
+                    setSelectedEntry(prev => prev ? { ...prev, status: 'Posted' } : null);
+                  }}
+                  style={{ fontWeight: 600, padding: '5px 16px', fontSize: '12px' }}
+                >
+                  ⚡ Post to Ledger
+                </button>
+              )}
               <button type="button" className="btn btn-outline btn-sm" onClick={() => setSelectedEntry(null)}>
                 Close
               </button>
